@@ -1,0 +1,4 @@
+google-genai==1.7.0
+google-cloud-aiplatform==1.85.0
+mesop==0.14.1
+python-dotenv==1.0.1
