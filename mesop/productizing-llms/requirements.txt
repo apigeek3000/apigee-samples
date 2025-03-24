@@ -1,4 +1,5 @@
-google-genai==1.7.0
 google-cloud-aiplatform==1.85.0
+langchain==0.3.18
+langchain-google-vertexai==2.0.12
 mesop==0.14.1
 python-dotenv==1.0.1

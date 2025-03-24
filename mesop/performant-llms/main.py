@@ -188,8 +188,7 @@ def call_api(input, first_input):
     response = model.invoke(input)
     yield "AI Assistant: "+response
   except Exception as e:
-    print(e.code)
-    print(e.message)
+    print(e)
     yield "Server error occured. Please rephrase your question and try again."
 
 def output():

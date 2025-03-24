@@ -4,7 +4,7 @@ This is a frontend for the Productizing LLMs demo. It will deploy a localhost UI
 ## Prereqs
 You already have the llm-token-limits deployed
 
-
+You need to redeploy the endpoint to call the target with ai-client SA. Also, create a new product, ai-product-partner, that is a mirror of ai-product-bronze with half the entitlements. Update ai-consumer-app with this product, use the newly created API Key for this demo.
 
 ## Local Development
 From within this mesop/productizing-llms folder, create a .env file with the following contents
