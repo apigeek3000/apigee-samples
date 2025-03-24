@@ -1,7 +1,6 @@
 import os
 
-from google import genai
-from google.genai import types
+from langchain_google_vertexai import VertexAI
 
 import mesop as me
 
@@ -11,18 +10,18 @@ PROMPT_EXAMPLES = [
   "UPDATE WITH A PROMPT RELEVANT TO CITY & DEMO"
 ]
 PROJECT_ID = os.environ.get("PROJECT_ID")
-APIGEE_KEY = os.environ.get("APIGEE_KEY")
 APIGEE_HOST = os.environ.get("APIGEE_HOST")
 API_ENDPOINT = "https://"+APIGEE_HOST+"/v1/samples/llm-semantic-cache"
 LOCATION="us-central1"
-MODEL="gemini-2.0-flash-001"
+MODEL="gemini-1.5-pro"
 
-client = genai.Client(
-  vertexai=True,
+model = VertexAI(
   project=PROJECT_ID,
   location=LOCATION,
-  http_options=types.HttpOptions(api_version='v1', base_url=API_ENDPOINT)
-)
+  api_endpoint=API_ENDPOINT,
+  api_transport="rest",
+  streaming=False,
+  model_name=MODEL)
 
 @me.stateclass
 class State:
@@ -186,11 +185,8 @@ def call_api(input, first_input):
   yield "Human: "+input+"\n\n"
 
   try:
-    response = client.models.generate_content(
-      model=MODEL, contents=input
-    )
-    print(response.text)
-    yield "AI Assistant: "+response.text
+    response = model.invoke(input)
+    yield "AI Assistant: "+response
   except Exception as e:
     print(e.code)
     print(e.message)

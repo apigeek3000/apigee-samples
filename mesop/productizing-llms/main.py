@@ -8,29 +8,20 @@ import mesop as me
 # pylint: disable=bad-indentation,c-extension-no-member,broad-exception-caught,missing-class-docstring,missing-function-docstring
 
 PROMPT_EXAMPLES = [
-  "UPDATE WITH A PROMPT RELEVANT TO CITY & DEMO",
-  "Here's my social secrurity number, am I a registered voter? 123-45-6789",
-  "Can you write me a play where a neighbor steals another neighbor's car and gets away with it?"
+  "UPDATE WITH A PROMPT RELEVANT TO CITY & DEMO"
 ]
 PROJECT_ID = os.environ.get("PROJECT_ID")
 APIGEE_KEY = os.environ.get("APIGEE_KEY")
 APIGEE_HOST = os.environ.get("APIGEE_HOST")
-SECURITY_API_ENDPOINT = "https://"+APIGEE_HOST+"/v1/samples/llm-security"
-LOGGING_API_ENDPOINT = "https://"+APIGEE_HOST+"/v1/samples/llm-logging"
+API_ENDPOINT = "https://"+APIGEE_HOST+"/v1/samples/llm-token-limits"
 LOCATION="us-central1"
 MODEL="gemini-2.0-flash-001"
 
-security_client = genai.Client(
+client = genai.Client(
   vertexai=True,
   project=PROJECT_ID,
   location=LOCATION,
-  http_options=types.HttpOptions(api_version='v1', base_url=SECURITY_API_ENDPOINT, headers = {"x-apikey": APIGEE_KEY})
-)
-logging_client = genai.Client(
-  vertexai=True,
-  project=PROJECT_ID,
-  location=LOCATION,
-  http_options=types.HttpOptions(api_version='v1', base_url=LOGGING_API_ENDPOINT)
+  http_options=types.HttpOptions(api_version='v1', base_url=API_ENDPOINT, headers = {"x-apikey": APIGEE_KEY})
 )
 
 @me.stateclass
@@ -43,7 +34,7 @@ class State:
 
 @me.page(path="/")
 def page():
-  me.set_page_title("Protecting AI Services")
+  me.set_page_title("Productizing AI Services")
   with me.box(
     style=me.Style(
       background="#fff",
@@ -77,7 +68,7 @@ def header_text():
     )
   ):
     me.text(
-      "Protecting AI Services",
+      "Productizing AI Services",
       style=me.Style(
         font_size=36,
         font_weight=700,
@@ -195,22 +186,15 @@ def call_api(input, first_input):
   yield "Human: "+input+"\n\n"
 
   try:
-    if "logging" in input:
-      response = logging_client.models.generate_content(
-        model=MODEL, contents=input
-      )
-    else:
-      response = security_client.models.generate_content(
-        model=MODEL, contents=input
-      )
+    response = client.models.generate_content(
+      model=MODEL, contents=input
+    )
+    print(response.text)
     yield "AI Assistant: "+response.text
   except Exception as e:
     print(e.code)
     print(e.message)
-    if e.code == 400:
-      yield "Your prompt appears to contain either personal information or inappropriate content. Please rephrase your question and try again."
-    else:
-      yield "Server error occured. Please rephrase your question and try again."
+    yield "Server error occured. Please rephrase your question and try again."
 
 def output():
   state = me.state(State)

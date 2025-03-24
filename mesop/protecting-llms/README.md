@@ -1,5 +1,5 @@
 # Mesop Frontend | Protecting LLMs
-This is an alternative frontend to use if you do not wish to use the unathenticated agent HTML chat window provided by a conversational agent. This frontend will make API Key authenticated calls to an API directly
+This is a frontend for the Protecting LLMs demo. It will deploy a localhost UI.
 
 ## Prereqs
 You already have the llm-security and llm-logging samples deployed

@@ -1,16 +1,19 @@
-# Mesop Frontend | Performant LLMs
-This is a frontend for the Performant LLMs demo. It will deploy a localhost UI.
+# Mesop Frontend | Productizing LLMs
+This is a frontend for the Productizing LLMs demo. It will deploy a localhost UI.
 
 ## Prereqs
-You already have the llm-semantic-cache deployed
+You already have the llm-token-limits deployed
+
+
 
 ## Local Development
-From within this mesop/performant-llms folder, create a .env file with the following contents
+From within this mesop/productizing-llms folder, create a .env file with the following contents
 ```
 MESOP_STATIC_FOLDER=static
 MESOP_STATIC_URL_PATH=/static
 APIGEE_HOST=YOUR_APIGEE_DOMAIN
 PROJECT_ID=YOUR_GCP_PROJECT
+APIGEE_KEY=YOUR_APIGEE_API_KEY
 ```
 
 Then start your venv and install requirements
