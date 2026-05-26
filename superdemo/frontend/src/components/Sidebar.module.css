@@ -1,0 +1,54 @@
+.sidebar {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.brand {
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--text);
+  padding: 0 8px 16px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-dim);
+  text-align: left;
+  width: 100%;
+  font-size: 14px;
+}
+
+.item:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.itemActive {
+  background: var(--accent-bg);
+  border-color: rgba(79, 140, 255, 0.4);
+  color: var(--text);
+}
+
+.icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.empty {
+  padding: 12px;
+  font-size: 13px;
+  color: var(--text-dim);
+}

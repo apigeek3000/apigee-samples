@@ -1,0 +1,33 @@
+.banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 14px;
+}
+
+.bannerReady   { border-color: rgba(74, 222, 128, 0.4); }
+.bannerWarning { border-color: rgba(251, 191, 36, 0.4); }
+.bannerError   { border-color: rgba(248, 113, 113, 0.5); }
+
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+  background: var(--text-dim);
+}
+.dotReady   { background: var(--success); }
+.dotWarning { background: var(--warning); }
+.dotError   { background: var(--error); }
+
+.meta {
+  color: var(--text-dim);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 12px;
+}
