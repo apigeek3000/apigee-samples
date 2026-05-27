@@ -100,21 +100,39 @@ DEMO_METADATA = {
 }
 
 
+def _demo_with_metadata(demo: dict, demo_config: dict) -> dict:
+    """Enrich a static DEMO_METADATA entry with secret-sourced fields."""
+    enriched = {**demo, "status": demo_config.get("status", "unknown")}
+    if demo["id"] == "llm-security":
+        for field in ("model_name", "model_armor_region"):
+            value = demo_config.get(field)
+            if value is not None:
+                enriched[field] = value
+    return enriched
+
+
 @app.get("/api/demos")
 def list_demos():
-    """Return available demos and backend readiness status."""
+    """Return available demos with per-demo status and llm-security model config."""
     try:
         config = get_config()
+        demos_block = config.get("demos", {})
         return {
             "status": "ready",
             "host": config.get("APIGEE_HOST"),
             "project_id": config.get("PROJECT_ID"),
-            "model_name": config.get("MODEL_NAME"),
-            "model_armor_region": config.get("MODEL_ARMOR_REGION"),
-            "demos": list(DEMO_METADATA.values()),
+            "demos": [
+                _demo_with_metadata(demo, demos_block.get(demo["id"], {}))
+                for demo in DEMO_METADATA.values()
+            ],
         }
     except HTTPException:
-        return {"status": "unconfigured", "demos": list(DEMO_METADATA.values())}
+        return {
+            "status": "unconfigured",
+            "demos": [
+                _demo_with_metadata(demo, {}) for demo in DEMO_METADATA.values()
+            ],
+        }
 
 
 @app.post("/api/config/reload")
@@ -140,11 +158,12 @@ async def proxy_request(demo_name: str, path: str, request: Request):
 
     if demo_name == "basic-quota":
         tier = request.headers.get("x-quota-tier", "trial")
-        key_name = f"BASIC_QUOTA_{tier.upper()}_KEY"
-        api_key = config.get(key_name)
+        basic_quota = config.get("demos", {}).get("basic-quota", {})
+        api_key = basic_quota.get(f"{tier}_key")
         target_url = f"https://{host}/v1/samples/basic-quota"
     elif demo_name == "llm-security":
-        api_key = config.get("LLM_SECURITY_KEY")
+        llm_security = config.get("demos", {}).get("llm-security", {})
+        api_key = llm_security.get("key")
         target_url = f"https://{host}/v2/samples/llm-security/{path}"
     else:
         raise HTTPException(status_code=404, detail=f"Unknown demo: {demo_name}")

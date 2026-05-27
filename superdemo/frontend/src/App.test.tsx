@@ -16,11 +16,17 @@ const readyDemos: DemosResponse = {
   status: 'ready',
   host: 'apigee.test',
   project_id: 'fake-project',
-  model_name: 'gemini-fake',
-  model_armor_region: 'us-central1',
   demos: [
-    { id: 'basic-quota', title: 'Basic Quota', description: 'd1', icon: '⏱️' },
-    { id: 'llm-security', title: 'LLM Security v2', description: 'd2', icon: '🛡️' },
+    { id: 'basic-quota', title: 'Basic Quota', description: 'd1', icon: '⏱️', status: 'passing' },
+    {
+      id: 'llm-security',
+      title: 'LLM Security v2',
+      description: 'd2',
+      icon: '🛡️',
+      status: 'passing',
+      model_name: 'gemini-fake',
+      model_armor_region: 'us-central1',
+    },
   ],
 }
 

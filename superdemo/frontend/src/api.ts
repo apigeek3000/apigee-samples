@@ -1,5 +1,7 @@
 import type {
   ApiError,
+  DemoMetadata,
+  DemoStatus,
   DemosResponse,
   QuotaResponse,
   QuotaTier,
@@ -7,6 +9,33 @@ import type {
 
 const DEMOS_URL = '/api/demos'
 const PROXY_PREFIX = '/api/proxy'
+
+const VALID_STATUSES: ReadonlySet<DemoStatus> = new Set<DemoStatus>([
+  'passing',
+  'failing',
+  'undeployed',
+  'unknown',
+])
+
+function normalizeStatus(value: unknown): DemoStatus {
+  if (typeof value === 'string' && VALID_STATUSES.has(value as DemoStatus)) {
+    return value as DemoStatus
+  }
+  return 'unknown'
+}
+
+function normalizeDemo(raw: unknown): DemoMetadata {
+  const d = raw as Partial<DemoMetadata> & { status?: unknown }
+  return {
+    id: d.id ?? '',
+    title: d.title ?? '',
+    description: d.description ?? '',
+    icon: d.icon ?? '',
+    status: normalizeStatus(d.status),
+    model_name: d.model_name,
+    model_armor_region: d.model_armor_region,
+  }
+}
 
 async function parseError(response: Response): Promise<ApiError> {
   let body: unknown = null
@@ -28,7 +57,13 @@ export async function fetchDemos(): Promise<DemosResponse> {
   if (!response.ok) {
     throw await parseError(response)
   }
-  return (await response.json()) as DemosResponse
+  const data = (await response.json()) as Omit<DemosResponse, 'demos'> & {
+    demos: unknown[]
+  }
+  return {
+    ...data,
+    demos: Array.isArray(data.demos) ? data.demos.map(normalizeDemo) : [],
+  }
 }
 
 export async function sendBasicQuota(tier: QuotaTier): Promise<QuotaResponse> {

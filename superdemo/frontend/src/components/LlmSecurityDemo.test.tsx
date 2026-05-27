@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { LlmSecurityDemo } from './LlmSecurityDemo'
-import type { DemosResponse } from '../types'
+import type { DemoMetadata, DemosResponse } from '../types'
 
 vi.mock('../api', () => ({
   sendLlmSecurity: vi.fn(),
@@ -10,15 +10,21 @@ vi.mock('../api', () => ({
 
 import { sendLlmSecurity } from '../api'
 
+const llmDemo: DemoMetadata = {
+  id: 'llm-security',
+  title: 'LLM Security v2',
+  description: 'd',
+  icon: '🛡️',
+  status: 'passing',
+  model_name: 'gemini-fake',
+  model_armor_region: 'us-central1',
+}
+
 const demos: DemosResponse = {
   status: 'ready',
   host: 'apigee.test',
   project_id: 'fake-project',
-  model_name: 'gemini-fake',
-  model_armor_region: 'us-central1',
-  demos: [
-    { id: 'llm-security', title: 'LLM Security v2', description: 'd', icon: '🛡️' },
-  ],
+  demos: [llmDemo],
 }
 
 beforeEach(() => {
@@ -30,7 +36,7 @@ describe('LlmSecurityDemo', () => {
     vi.mocked(sendLlmSecurity).mockResolvedValueOnce({ candidates: [] })
     const user = userEvent.setup()
 
-    render(<LlmSecurityDemo demos={demos} />)
+    render(<LlmSecurityDemo demos={demos} demo={llmDemo} />)
 
     await user.type(screen.getByLabelText(/prompt/i), 'hello world')
     await user.click(screen.getByRole('button', { name: /Send Prompt/i }))
@@ -49,7 +55,7 @@ describe('LlmSecurityDemo', () => {
     })
     const user = userEvent.setup()
 
-    render(<LlmSecurityDemo demos={demos} />)
+    render(<LlmSecurityDemo demos={demos} demo={llmDemo} />)
     await user.type(screen.getByLabelText(/prompt/i), 'hello')
     await user.click(screen.getByRole('button', { name: /Send Prompt/i }))
 
@@ -64,7 +70,7 @@ describe('LlmSecurityDemo', () => {
     })
     const user = userEvent.setup()
 
-    render(<LlmSecurityDemo demos={demos} />)
+    render(<LlmSecurityDemo demos={demos} demo={llmDemo} />)
     await user.type(screen.getByLabelText(/prompt/i), 'jailbreak')
     await user.click(screen.getByRole('button', { name: /Send Prompt/i }))
 

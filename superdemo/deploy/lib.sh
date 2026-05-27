@@ -70,3 +70,70 @@ smoke_test_proxy() {
   echo "$code"
   return $curl_status
 }
+
+# derive_demo_status <deploy_status> <test_status>
+#
+# Maps the deploy_status + test_status strings produced by deploy-superdemo.sh
+# into one of "passing" / "failing" / "undeployed". Echoes the result.
+#   - "deploy-failed"             → "undeployed"
+#   - any test_status starting with "passed" → "passing"
+#   - anything else               → "failing"
+derive_demo_status() {
+  local deploy_status="$1" test_status="$2"
+
+  case "$deploy_status" in
+    deploy-failed)
+      echo "undeployed"
+      return
+      ;;
+  esac
+
+  case "$test_status" in
+    passed*)
+      echo "passing"
+      ;;
+    *)
+      echo "failing"
+      ;;
+  esac
+}
+
+# build_secret_payload <out_file>
+#
+# Reads global env vars set by deploy-superdemo.sh and writes the nested-shape
+# superdemo-config JSON to <out_file> via jq.
+#
+# Globals consumed:
+#   APIGEE_HOST, PROJECT_ID
+#   BASIC_QUOTA_TRIAL_KEY, BASIC_QUOTA_PREMIUM_KEY, BASIC_QUOTA_STATUS
+#   LLM_SECURITY_KEY, MODEL_NAME, MODEL_ARMOR_REGION, LLM_SECURITY_STATUS
+build_secret_payload() {
+  local out_file="$1"
+  jq -n \
+    --arg apigee_host    "$APIGEE_HOST" \
+    --arg project_id     "$PROJECT_ID" \
+    --arg bq_trial_key   "$BASIC_QUOTA_TRIAL_KEY" \
+    --arg bq_premium_key "$BASIC_QUOTA_PREMIUM_KEY" \
+    --arg bq_status      "$BASIC_QUOTA_STATUS" \
+    --arg llm_key        "$LLM_SECURITY_KEY" \
+    --arg llm_model      "$MODEL_NAME" \
+    --arg llm_region     "$MODEL_ARMOR_REGION" \
+    --arg llm_status     "$LLM_SECURITY_STATUS" \
+    '{
+      APIGEE_HOST: $apigee_host,
+      PROJECT_ID:  $project_id,
+      demos: {
+        "basic-quota": {
+          trial_key:   $bq_trial_key,
+          premium_key: $bq_premium_key,
+          status:      $bq_status
+        },
+        "llm-security": {
+          key:                $llm_key,
+          model_name:         $llm_model,
+          model_armor_region: $llm_region,
+          status:             $llm_status
+        }
+      }
+    }' > "$out_file"
+}

@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import copy
 import gzip
 import json
 import os
@@ -43,18 +44,26 @@ FAKE_HOST = "apigee.test.example.com"
 FAKE_CONFIG = {
     "APIGEE_HOST": FAKE_HOST,
     "PROJECT_ID": "fake-project",
-    "MODEL_NAME": "gemini-fake",
-    "MODEL_ARMOR_REGION": "us-central1",
-    "BASIC_QUOTA_TRIAL_KEY": "trial-key-123",
-    "BASIC_QUOTA_PREMIUM_KEY": "premium-key-456",
-    "LLM_SECURITY_KEY": "llm-key-789",
+    "demos": {
+        "basic-quota": {
+            "trial_key": "trial-key-123",
+            "premium_key": "premium-key-456",
+            "status": "passing",
+        },
+        "llm-security": {
+            "key": "llm-key-789",
+            "model_name": "gemini-fake",
+            "model_armor_region": "us-central1",
+            "status": "passing",
+        },
+    },
 }
 
 
 @pytest.fixture
 def fake_config():
     """Seed main._config_cache so get_config() short-circuits and skips Secret Manager."""
-    main._config_cache = dict(FAKE_CONFIG)
+    main._config_cache = copy.deepcopy(FAKE_CONFIG)
     try:
         yield main._config_cache
     finally:
@@ -103,7 +112,7 @@ def test_proxy_basic_quota_trial_injects_query_param_key(fake_config):
 
 
 def test_proxy_basic_quota_premium_uses_premium_key(fake_config):
-    """x-quota-tier: premium selects BASIC_QUOTA_PREMIUM_KEY."""
+    """x-quota-tier: premium selects the premium_key from the nested config."""
     target_url = f"https://{FAKE_HOST}/v1/samples/basic-quota"
     with respx.mock(assert_all_called=True) as mock:
         route = mock.route(url__startswith=target_url).respond(200, json={"message": "ok"})
@@ -178,10 +187,70 @@ def test_proxy_strips_hop_by_hop_response_headers(fake_config):
 
 
 def test_proxy_missing_api_key_returns_500(fake_config):
-    """Config present but BASIC_QUOTA_TRIAL_KEY missing → 500 with documented detail."""
-    del fake_config["BASIC_QUOTA_TRIAL_KEY"]
+    """Config present but trial_key missing → 500 with documented detail."""
+    del fake_config["demos"]["basic-quota"]["trial_key"]
     # No respx mock — request should fail before any outbound call
     response = client.get("/api/proxy/basic-quota/")
 
     assert response.status_code == 500
     assert response.json()["detail"] == "API key not found for basic-quota"
+
+
+def test_list_demos_includes_status(fake_config):
+    response = client.get("/api/demos")
+    assert response.status_code == 200
+    data = response.json()
+    statuses = {d["id"]: d["status"] for d in data["demos"]}
+    assert statuses == {"basic-quota": "passing", "llm-security": "passing"}
+
+
+def test_list_demos_missing_demos_block(fake_config):
+    """No `demos` key in the config → all demos report status=unknown."""
+    del fake_config["demos"]
+    response = client.get("/api/demos")
+    data = response.json()
+    for demo in data["demos"]:
+        assert demo["status"] == "unknown"
+
+
+def test_list_demos_partial_demos_block(fake_config):
+    """Demo missing from `demos` map → that demo reports status=unknown."""
+    del fake_config["demos"]["llm-security"]
+    response = client.get("/api/demos")
+    data = response.json()
+    statuses = {d["id"]: d["status"] for d in data["demos"]}
+    assert statuses["basic-quota"] == "passing"
+    assert statuses["llm-security"] == "unknown"
+
+
+def test_list_demos_unrecognized_status_passes_through(fake_config):
+    """Backend is a faithful mirror; normalization happens frontend-side."""
+    fake_config["demos"]["basic-quota"]["status"] = "weird"
+    response = client.get("/api/demos")
+    data = response.json()
+    bq = next(d for d in data["demos"] if d["id"] == "basic-quota")
+    assert bq["status"] == "weird"
+
+
+def test_unconfigured_demos_all_unknown():
+    """No config at all → every demo gets status=unknown."""
+    response = client.get("/api/demos")
+    data = response.json()
+    assert data["status"] == "unconfigured"
+    for demo in data["demos"]:
+        assert demo["status"] == "unknown"
+
+
+def test_list_demos_llm_security_includes_model_info(fake_config):
+    response = client.get("/api/demos")
+    data = response.json()
+    llm = next(d for d in data["demos"] if d["id"] == "llm-security")
+    assert llm["model_name"] == "gemini-fake"
+    assert llm["model_armor_region"] == "us-central1"
+
+
+def test_list_demos_does_not_expose_model_fields_at_top_level(fake_config):
+    response = client.get("/api/demos")
+    data = response.json()
+    assert "model_name" not in data
+    assert "model_armor_region" not in data

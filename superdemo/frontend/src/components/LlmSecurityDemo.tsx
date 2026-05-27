@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { sendLlmSecurity } from '../api'
-import type { ApiError, DemosResponse } from '../types'
+import type { ApiError, DemoMetadata, DemosResponse } from '../types'
 import { ResponseCard } from './ResponseCard'
 import styles from './LlmSecurityDemo.module.css'
 
@@ -24,17 +24,18 @@ const SAMPLE_PROMPTS: { label: string; text: string; malicious?: boolean }[] = [
 
 interface Props {
   demos: DemosResponse
+  demo: DemoMetadata
 }
 
-export function LlmSecurityDemo({ demos }: Props) {
+export function LlmSecurityDemo({ demos, demo }: Props) {
   const [prompt, setPrompt] = useState('')
   const [loading, setLoading] = useState(false)
   const [payload, setPayload] = useState<unknown>(undefined)
   const [error, setError] = useState<ApiError | null>(null)
 
   const projectId = demos.project_id ?? ''
-  const region = demos.model_armor_region ?? ''
-  const model = demos.model_name ?? ''
+  const region = demo.model_armor_region ?? ''
+  const model = demo.model_name ?? ''
 
   async function handleSend() {
     if (!prompt.trim()) return

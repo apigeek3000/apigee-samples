@@ -239,55 +239,58 @@ for i in "${!demo_labels[@]}"; do
 done
 
 # ====================================================================
-# Collect API keys and store in Secret Manager
-#
-# Write conditions:
-#   - We must have both critical keys (BASIC_QUOTA_PREMIUM_KEY, LLM_SECURITY_KEY)
-#     in hand, AND
-#   - Either at least one demo was newly deployed this run, OR
-#     the secret does not exist yet (first-time setup).
-# This avoids creating a fresh secret version on every no-op re-run.
+# Compute per-demo status and write Secret Manager only on payload diff
 # ====================================================================
 SECRET_NAME="superdemo-config"
 secret_status=""
 
+# Derive statuses (indexes match demo_labels order).
+BASIC_QUOTA_STATUS=$(derive_demo_status "${demo_deploy_status[0]}" "${demo_test_status[0]}")
+LLM_SECURITY_STATUS=$(derive_demo_status "${demo_deploy_status[1]}" "${demo_test_status[1]}")
+export BASIC_QUOTA_STATUS LLM_SECURITY_STATUS
+
 if [[ -z "$BASIC_QUOTA_PREMIUM_KEY" || -z "$LLM_SECURITY_KEY" ]]; then
   secret_status="skipped (no usable keys)"
 else
-  any_new_deploy=0
-  for s in "${demo_deploy_status[@]}"; do
-    if [[ "$s" == "deployed" ]]; then
-      any_new_deploy=1
-      break
-    fi
-  done
+  tmpfile=$(mktemp /tmp/superdemo-config.XXXXXX.json)
+  build_secret_payload "$tmpfile"
+  new_payload=$(jq -S '.' "$tmpfile")
 
   secret_exists=0
   if gcloud secrets describe "$SECRET_NAME" --project="$PROJECT" >/dev/null 2>&1; then
     secret_exists=1
   fi
 
-  if (( any_new_deploy == 0 )) && (( secret_exists == 1 )); then
-    secret_status="skipped (no new deploys, secret current)"
+  echo
+  echo "============================================="
+  echo " Storing config in Google Secret Manager"
+  echo "============================================="
+
+  should_write=0
+  if (( secret_exists == 0 )); then
+    should_write=1
   else
-    tmpfile=$(mktemp /tmp/superdemo-config.XXXXXX.json)
-    cat <<EOF > "$tmpfile"
-{
-  "APIGEE_HOST": "$APIGEE_HOST",
-  "PROJECT_ID": "$PROJECT_ID",
-  "MODEL_NAME": "${MODEL_NAME}",
-  "MODEL_ARMOR_REGION": "${MODEL_ARMOR_REGION}",
-  "BASIC_QUOTA_TRIAL_KEY": "$BASIC_QUOTA_TRIAL_KEY",
-  "BASIC_QUOTA_PREMIUM_KEY": "$BASIC_QUOTA_PREMIUM_KEY",
-  "LLM_SECURITY_KEY": "$LLM_SECURITY_KEY"
-}
-EOF
+    # On read failure, prefer to write — better to publish a fresh version
+    # than to do nothing when we can't compare. Keep the gcloud and jq
+    # exit codes separate so an empty/malformed read still surfaces the WARN.
+    current_raw=$(gcloud secrets versions access latest \
+          --secret="$SECRET_NAME" --project="$PROJECT" 2>/dev/null)
+    gcloud_rc=$?
+    current_payload=""
+    if (( gcloud_rc == 0 )); then
+      current_payload=$(printf '%s' "$current_raw" | jq -S '.' 2>/dev/null) || current_payload=""
+    fi
+    if (( gcloud_rc != 0 )) || [[ -z "$current_payload" ]]; then
+      echo "WARN: could not read current secret version; will write a new one."
+      should_write=1
+    elif [[ "$current_payload" != "$new_payload" ]]; then
+      should_write=1
+    fi
+  fi
 
-    echo
-    echo "============================================="
-    echo " Storing config in Google Secret Manager"
-    echo "============================================="
-
+  if (( should_write == 0 )); then
+    secret_status="skipped (no changes)"
+  else
     if (( secret_exists == 0 )); then
       if ! gcloud secrets create "$SECRET_NAME" --replication-policy="automatic" --project="$PROJECT"; then
         secret_status="failed (create)"
@@ -305,9 +308,9 @@ EOF
         overall_failed=1
       fi
     fi
-
-    rm -f "$tmpfile"
   fi
+
+  rm -f "$tmpfile"
 fi
 
 # ====================================================================

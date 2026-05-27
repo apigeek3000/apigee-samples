@@ -48,6 +48,15 @@ source ./superdemo/deploy/secret.sh
 
 To tear everything down: `./superdemo/deploy/clean-superdemo.sh`.
 
+## Demo status indicators
+
+The sidebar shows a colored dot next to each demo: green for passing, amber
+for failing, red for undeployed, gray for unknown. The toggle at the bottom
+of the sidebar hides the dots — useful during live customer demos when you'd
+rather not advertise that something is currently broken. The setting persists
+in localStorage. Status is set by `deploy-superdemo.sh` at the end of each
+run, so re-running it refreshes every demo's status.
+
 ## Local dev
 
 Two terminals, one each for the backend and frontend.
@@ -72,4 +81,4 @@ Backend API docs: FastAPI auto-generates interactive Swagger UI at
 http://localhost:8000/docs and ReDoc at http://localhost:8000/redoc. The
 raw OpenAPI schema is at http://localhost:8000/openapi.json.
 
-Tests: `npm test` in `superdemo/frontend/`, `uv run pytest` in `superdemo/backend/`.
+Tests: `npm test` in `superdemo/frontend/`, `uv run pytest` in `superdemo/backend/`, and `bash superdemo/deploy/lib.test.sh` for the bash helpers.

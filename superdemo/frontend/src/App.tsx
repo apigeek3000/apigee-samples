@@ -6,11 +6,13 @@ import { StatusBanner } from './components/StatusBanner'
 import { BasicQuotaDemo } from './components/BasicQuotaDemo'
 import { LlmSecurityDemo } from './components/LlmSecurityDemo'
 import { EmptyState } from './components/EmptyState'
+import { useShowStatus } from './hooks/useShowStatus'
 
 export function App() {
   const [demos, setDemos] = useState<DemosResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [activeDemoId, setActiveDemoId] = useState<string | null>(null)
+  const [showStatus, setShowStatus] = useShowStatus()
 
   useEffect(() => {
     fetchDemos()
@@ -34,13 +36,15 @@ export function App() {
         demos={demos?.demos ?? []}
         activeDemoId={activeDemoId}
         onSelect={setActiveDemoId}
+        showStatus={showStatus}
+        onShowStatusChange={setShowStatus}
       />
       <main className="app__main">
         <StatusBanner demos={demos} error={error} />
         {activeDemo === null && <EmptyState />}
         {activeDemo?.id === 'basic-quota' && <BasicQuotaDemo />}
         {activeDemo?.id === 'llm-security' && demos && (
-          <LlmSecurityDemo demos={demos} />
+          <LlmSecurityDemo demos={demos} demo={activeDemo} />
         )}
       </main>
     </div>

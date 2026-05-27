@@ -77,7 +77,15 @@ describe('fetchDemos', () => {
       jsonResponse({
         status: 'ready',
         host: 'apigee.test',
-        demos: [{ id: 'basic-quota', title: 'Basic Quota', description: 'd', icon: 'i' }],
+        demos: [
+          {
+            id: 'basic-quota',
+            title: 'Basic Quota',
+            description: 'd',
+            icon: 'i',
+            status: 'passing',
+          },
+        ],
       }),
     )
 
@@ -86,6 +94,7 @@ describe('fetchDemos', () => {
     expect(fetch).toHaveBeenCalledWith('/api/demos')
     expect(result.status).toBe('ready')
     expect(result.demos).toHaveLength(1)
+    expect(result.demos[0].status).toBe('passing')
   })
 
   it('throws ApiError with status and detail on non-2xx', async () => {
@@ -184,5 +193,51 @@ describe('sendLlmSecurity', () => {
       message: 'Request blocked or failed (422)',
       body: { blocked: true },
     })
+  })
+})
+
+describe('fetchDemos status normalization', () => {
+  it('preserves valid status values', async () => {
+    const fetch = mockFetch()
+    fetch.mockResolvedValueOnce(
+      jsonResponse({
+        status: 'ready',
+        demos: [
+          { id: 'a', title: 't', description: 'd', icon: 'i', status: 'passing' },
+          { id: 'b', title: 't', description: 'd', icon: 'i', status: 'failing' },
+          { id: 'c', title: 't', description: 'd', icon: 'i', status: 'undeployed' },
+        ],
+      }),
+    )
+    const result = await fetchDemos()
+    expect(result.demos.map((d) => d.status)).toEqual([
+      'passing',
+      'failing',
+      'undeployed',
+    ])
+  })
+
+  it('normalizes unrecognized status to "unknown"', async () => {
+    const fetch = mockFetch()
+    fetch.mockResolvedValueOnce(
+      jsonResponse({
+        status: 'ready',
+        demos: [{ id: 'x', title: 't', description: 'd', icon: 'i', status: 'bogus' }],
+      }),
+    )
+    const result = await fetchDemos()
+    expect(result.demos[0].status).toBe('unknown')
+  })
+
+  it('normalizes missing status to "unknown"', async () => {
+    const fetch = mockFetch()
+    fetch.mockResolvedValueOnce(
+      jsonResponse({
+        status: 'ready',
+        demos: [{ id: 'x', title: 't', description: 'd', icon: 'i' }],
+      }),
+    )
+    const result = await fetchDemos()
+    expect(result.demos[0].status).toBe('unknown')
   })
 })
