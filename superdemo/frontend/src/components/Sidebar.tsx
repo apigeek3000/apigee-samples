@@ -10,7 +10,10 @@ interface Props {
 export function Sidebar({ demos, activeDemoId, onSelect }: Props) {
   return (
     <nav className={styles.sidebar} aria-label="Demos">
-      <div className={styles.brand}>Apigee Superdemo</div>
+      <div className={styles.brand}>
+        <img src="/favicon.ico" alt="" className={styles.brandLogo} />
+        <span>Apigee Superdemo</span>
+      </div>
       {demos.length === 0 && (
         <div className={styles.empty}>No demos deployed yet.</div>
       )}
