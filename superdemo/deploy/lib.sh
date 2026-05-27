@@ -52,20 +52,34 @@ is_proxy_deployed_to_env() {
 
 # smoke_test_proxy <label> <method> <url> [curl_args...]
 #
-# Runs curl with the supplied method, URL and extra args, discarding the body
-# and echoing only the HTTP status code to stdout.
+# Runs curl with the supplied method, URL and extra args, echoing only the
+# HTTP status code to stdout. On a non-2xx response (or curl failure) the
+# response body is printed to stderr so the deploy log shows what went wrong.
 # Returns 0 if curl itself succeeded (network reachable, TLS OK), 1 otherwise.
 # Caller decides pass/fail by inspecting the echoed code.
 smoke_test_proxy() {
-  local label method url code curl_status
+  local label method url code curl_status body_file
   label="$1"
   method="$2"
   url="$3"
   shift 3
 
-  code=$(curl -s -o /dev/null -w '%{http_code}' \
+  body_file=$(mktemp /tmp/smoke-body.XXXXXX)
+  code=$(curl -s -o "$body_file" -w '%{http_code}' \
     -X "$method" "$url" "$@" --max-time 30)
   curl_status=$?
+
+  if [[ "$code" != 2* ]]; then
+    {
+      printf '  [smoke_test_proxy] %s response (HTTP %s):\n' "$label" "$code"
+      if [[ -s "$body_file" ]]; then
+        sed 's/^/    /' "$body_file"
+      else
+        printf '    (empty body)\n'
+      fi
+    } >&2
+  fi
+  rm -f "$body_file"
 
   echo "$code"
   return $curl_status
@@ -107,18 +121,32 @@ derive_demo_status() {
 #   APIGEE_HOST, PROJECT_ID
 #   BASIC_QUOTA_TRIAL_KEY, BASIC_QUOTA_PREMIUM_KEY, BASIC_QUOTA_STATUS
 #   LLM_SECURITY_KEY, MODEL_NAME, MODEL_ARMOR_REGION, LLM_SECURITY_STATUS
+#   LLM_TOKEN_LIMITS_BRONZE_KEY, LLM_TOKEN_LIMITS_SILVER_KEY,
+#   LLM_TOKEN_LIMITS_STATUS, REGION
+#
+# Token limits below are mirrored from llm-token-limits-v2/aiproduct-*.json.
+# If those files change, update these constants. (We do not read them at
+# deploy time to keep edits inside superdemo/ per the project's scope rule.)
 build_secret_payload() {
   local out_file="$1"
   jq -n \
-    --arg apigee_host    "$APIGEE_HOST" \
-    --arg project_id     "$PROJECT_ID" \
-    --arg bq_trial_key   "$BASIC_QUOTA_TRIAL_KEY" \
-    --arg bq_premium_key "$BASIC_QUOTA_PREMIUM_KEY" \
-    --arg bq_status      "$BASIC_QUOTA_STATUS" \
-    --arg llm_key        "$LLM_SECURITY_KEY" \
-    --arg llm_model      "$MODEL_NAME" \
-    --arg llm_region     "$MODEL_ARMOR_REGION" \
-    --arg llm_status     "$LLM_SECURITY_STATUS" \
+    --arg apigee_host       "$APIGEE_HOST" \
+    --arg project_id        "$PROJECT_ID" \
+    --arg bq_trial_key      "$BASIC_QUOTA_TRIAL_KEY" \
+    --arg bq_premium_key    "$BASIC_QUOTA_PREMIUM_KEY" \
+    --arg bq_status         "$BASIC_QUOTA_STATUS" \
+    --arg llm_key           "$LLM_SECURITY_KEY" \
+    --arg llm_model         "$MODEL_NAME" \
+    --arg llm_region        "$MODEL_ARMOR_REGION" \
+    --arg llm_status        "$LLM_SECURITY_STATUS" \
+    --arg ltl_bronze_key    "$LLM_TOKEN_LIMITS_BRONZE_KEY" \
+    --arg ltl_silver_key    "$LLM_TOKEN_LIMITS_SILVER_KEY" \
+    --arg ltl_status        "$LLM_TOKEN_LIMITS_STATUS" \
+    --arg ltl_region        "$REGION" \
+    --arg ltl_model         "$MODEL_NAME" \
+    --argjson ltl_bronze    2000 \
+    --argjson ltl_silver    5000 \
+    --argjson ltl_interval  5 \
     '{
       APIGEE_HOST: $apigee_host,
       PROJECT_ID:  $project_id,
@@ -133,7 +161,41 @@ build_secret_payload() {
           model_name:         $llm_model,
           model_armor_region: $llm_region,
           status:             $llm_status
+        },
+        "llm-token-limits-v2": {
+          bronze_key:         $ltl_bronze_key,
+          silver_key:         $ltl_silver_key,
+          status:             $ltl_status,
+          bronze_token_limit: $ltl_bronze,
+          silver_token_limit: $ltl_silver,
+          interval_minutes:   $ltl_interval,
+          model:              $ltl_model,
+          region:             $ltl_region
         }
       }
     }' > "$out_file"
+}
+
+# fetch_app_key_for_product <app_name> <product_name>
+#
+# Echoes the consumerKey whose apiProducts[0].apiproduct matches <product_name>.
+# Echoes empty string if no match or apigeecli fails.
+# Used by superdemo to fetch bronze + silver keys from the sibling sample's
+# shared developer app (ai-consumer-app-v2), where each credential is bound
+# to a different AI Product.
+fetch_app_key_for_product() {
+  local app_name product key
+  app_name="$1"
+  product="$2"
+  key=$(apigeecli apps get --name "$app_name" --org "$PROJECT" \
+        --token "$TOKEN" --disable-check 2>/dev/null \
+        | jq -r --arg p "$product" \
+          '.[0].credentials[]
+           | select(.apiProducts[0].apiproduct==$p)
+           | .consumerKey' 2>/dev/null)
+  if [[ -z "$key" || "$key" == "null" ]]; then
+    echo ""
+  else
+    echo "$key"
+  fi
 }

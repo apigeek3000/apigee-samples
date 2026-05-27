@@ -1,0 +1,85 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--surface);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tierBadge {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: var(--text);
+}
+
+.tierBronze { background: #b87333; }
+.tierSilver { background: #94a3b8; }
+
+.actions {
+  display: flex;
+  gap: 6px;
+}
+
+.actionBtn {
+  font-size: 11px;
+  padding: 2px 8px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.actionBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.transcript {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 120px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.turn {
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+.turnUser {
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.turnModel {
+  background: var(--accent-bg);
+  border: 1px solid var(--accent);
+}
+
+.turnError {
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid var(--error);
+  color: var(--error);
+}
+
+.burstChip {
+  font-size: 11px;
+  color: var(--text-dim);
+}

@@ -5,6 +5,9 @@ import type {
   DemosResponse,
   QuotaResponse,
   QuotaTier,
+  RateLimitResponse,
+  RateLimitTier,
+  VertexContent,
 } from './types'
 
 const DEMOS_URL = '/api/demos'
@@ -34,6 +37,11 @@ function normalizeDemo(raw: unknown): DemoMetadata {
     status: normalizeStatus(d.status),
     model_name: d.model_name,
     model_armor_region: d.model_armor_region,
+    bronze_token_limit: d.bronze_token_limit,
+    silver_token_limit: d.silver_token_limit,
+    interval_minutes: d.interval_minutes,
+    model: d.model,
+    region: d.region,
   }
 }
 
@@ -150,4 +158,59 @@ export function parseQuotaResponse(raw: unknown): QuotaResponse {
   const message =
     typeof record.message === 'string' ? record.message : undefined
   return { message, quotaCount, quotaLimit, raw }
+}
+
+interface LlmRateLimitingRequest {
+  tier: RateLimitTier
+  contents: VertexContent[]
+  projectId: string
+  region: string
+  model: string
+}
+
+export async function sendLlmRateLimiting(
+  req: LlmRateLimitingRequest,
+): Promise<RateLimitResponse> {
+  const path = `v1/projects/${req.projectId}/locations/${req.region}/publishers/google/models/${req.model}:generateContent`
+  const response = await fetch(`${PROXY_PREFIX}/llm-token-limits-v2/${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-rate-limit-tier': req.tier,
+    },
+    body: JSON.stringify({ contents: req.contents }),
+  })
+  const text = await response.text()
+  let body: unknown
+  try {
+    body = text ? JSON.parse(text) : null
+  } catch {
+    body = text
+  }
+  if (!response.ok) {
+    const err: ApiError = {
+      status: response.status,
+      message:
+        body && typeof body === 'object' && 'fault' in body
+          ? 'Token quota exceeded'
+          : `Request failed (${response.status})`,
+      body,
+    }
+    throw err
+  }
+  return parseRateLimitResponse(body)
+}
+
+function parseRateLimitResponse(raw: unknown): RateLimitResponse {
+  const record = (raw ?? {}) as Record<string, unknown>
+  const candidates = record.candidates as
+    | { content?: { parts?: { text?: string }[] } }[]
+    | undefined
+  const text = candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+  const usage = (record.usageMetadata ?? {}) as Record<string, unknown>
+  return {
+    text,
+    totalTokens: toNumber(usage.totalTokenCount),
+    raw,
+  }
 }

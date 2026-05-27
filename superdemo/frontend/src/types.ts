@@ -10,6 +10,16 @@ export interface DemoMetadata {
   model_name?: string
   /** Present only on the `llm-security` demo. */
   model_armor_region?: string
+  /** Present only on the `llm-token-limits-v2` demo. */
+  bronze_token_limit?: number
+  /** Present only on the `llm-token-limits-v2` demo. */
+  silver_token_limit?: number
+  /** Present only on the `llm-token-limits-v2` demo. */
+  interval_minutes?: number
+  /** Present only on the `llm-token-limits-v2` demo. */
+  model?: string
+  /** Present only on the `llm-token-limits-v2` demo. */
+  region?: string
 }
 
 export interface DemosResponse {
@@ -32,4 +42,25 @@ export interface ApiError {
   status: number
   message: string
   body?: unknown
+}
+
+export type RateLimitTier = 'bronze' | 'silver'
+
+export interface VertexContent {
+  role: 'user' | 'model'
+  parts: { text: string }[]
+}
+
+export interface RateLimitTurn {
+  id: string
+  role: 'user' | 'model' | 'error'
+  text: string
+  totalTokens?: number
+  httpStatus?: number
+}
+
+export interface RateLimitResponse {
+  text: string
+  totalTokens?: number
+  raw: unknown
 }

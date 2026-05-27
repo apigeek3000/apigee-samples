@@ -50,6 +50,17 @@ if [ -f "$rootdir/llm-security-v2/clean-up-llm-security-v2.sh" ]; then
 fi
 
 # ====================================================================
+# Clean llm-token-limits-v2
+# ====================================================================
+echo "============================================="
+echo " Cleaning LLM Token Limits v2"
+echo "============================================="
+if [ -f "$rootdir/llm-token-limits-v2/undeploy-llm-token-limits-v2.sh" ]; then
+  cd "$rootdir/llm-token-limits-v2"
+  ./undeploy-llm-token-limits-v2.sh || true
+fi
+
+# ====================================================================
 # Delete Secret Manager secret
 # ====================================================================
 cd "$rootdir"

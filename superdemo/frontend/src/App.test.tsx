@@ -8,6 +8,7 @@ vi.mock('./api', () => ({
   fetchDemos: vi.fn(),
   sendBasicQuota: vi.fn(),
   sendLlmSecurity: vi.fn(),
+  sendLlmRateLimiting: vi.fn(),
 }))
 
 import { fetchDemos } from './api'
@@ -91,5 +92,35 @@ describe('App — sidebar navigation', () => {
     expect(
       await screen.findByRole('heading', { level: 2, name: /LLM Security v2/i }),
     ).toBeInTheDocument()
+  })
+
+  it('renders LlmRateLimitingDemo when llm-token-limits-v2 is the active demo', async () => {
+    vi.mocked(fetchDemos).mockResolvedValueOnce({
+      status: 'ready',
+      host: 'h',
+      project_id: 'p',
+      demos: [
+        {
+          id: 'llm-token-limits-v2',
+          title: 'LLM Rate Limiting',
+          description: 'd',
+          icon: '⚡',
+          status: 'passing',
+          bronze_token_limit: 2000,
+          silver_token_limit: 5000,
+          interval_minutes: 5,
+          model: 'gemini-2.5-flash',
+          region: 'us-central1',
+        },
+      ],
+    })
+
+    render(<App />)
+
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'LLM Rate Limiting' }),
+    ).toBeInTheDocument()
+    expect(screen.getByLabelText('Bronze')).toBeInTheDocument()
+    expect(screen.getByLabelText('Silver')).toBeInTheDocument()
   })
 })

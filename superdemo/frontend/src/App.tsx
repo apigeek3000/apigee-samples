@@ -5,6 +5,7 @@ import { Sidebar } from './components/Sidebar'
 import { StatusBanner } from './components/StatusBanner'
 import { BasicQuotaDemo } from './components/BasicQuotaDemo'
 import { LlmSecurityDemo } from './components/LlmSecurityDemo'
+import { LlmRateLimitingDemo } from './components/LlmRateLimitingDemo'
 import { EmptyState } from './components/EmptyState'
 import { useShowStatus } from './hooks/useShowStatus'
 
@@ -45,6 +46,9 @@ export function App() {
         {activeDemo?.id === 'basic-quota' && <BasicQuotaDemo />}
         {activeDemo?.id === 'llm-security' && demos && (
           <LlmSecurityDemo demos={demos} demo={activeDemo} />
+        )}
+        {activeDemo?.id === 'llm-token-limits-v2' && demos && (
+          <LlmRateLimitingDemo demos={demos} demo={activeDemo} />
         )}
       </main>
     </div>

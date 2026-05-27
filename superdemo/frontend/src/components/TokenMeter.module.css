@@ -1,0 +1,38 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 12px;
+}
+
+.label {
+  font-weight: 600;
+}
+
+.numerals {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+
+.bar {
+  background: var(--border);
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.barFill {
+  background: var(--accent);
+  height: 100%;
+  transition: width 200ms ease;
+}
+
+.barFillOver {
+  background: var(--error);
+}

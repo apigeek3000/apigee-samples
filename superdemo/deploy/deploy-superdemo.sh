@@ -37,7 +37,7 @@ elif [ -n "$PROJECT" ] && [ -z "$PROJECT_ID" ]; then
   export PROJECT_ID="$PROJECT"
 fi
 
-check_shell_variables PROJECT APIGEE_ENV APIGEE_HOST
+check_shell_variables PROJECT APIGEE_ENV APIGEE_HOST REGION
 
 # llm-security-v2 also requires these:
 check_shell_variables PROJECT_ID SERVICE_ACCOUNT_NAME MODEL_NAME MODEL_ARMOR_REGION MODEL_ARMOR_TEMPLATE_ID
@@ -79,18 +79,22 @@ TOKEN=$(gcloud auth print-access-token)
 demo_labels=(
   "basic-quota"
   "llm-security-v2"
+  "llm-token-limits-v2"
 )
 demo_proxy_names=(
   "basic-quota"
   "llm-security-v2"
+  "llm-token-limits-v2"
 )
 demo_deploy_dirs=(
   "$rootdir/basic-quota"
   "$rootdir/llm-security-v2"
+  "$rootdir/llm-token-limits-v2"
 )
 demo_deploy_cmds=(
   "./deploy-basic-quota.sh"
   "./deploy-llm-security-v2.sh"
+  "./deploy-llm-token-limits-v2.sh"
 )
 
 # Result accumulators, populated by the loop.
@@ -101,6 +105,8 @@ demo_test_status=()
 BASIC_QUOTA_TRIAL_KEY=""
 BASIC_QUOTA_PREMIUM_KEY=""
 LLM_SECURITY_KEY=""
+LLM_TOKEN_LIMITS_BRONZE_KEY=""
+LLM_TOKEN_LIMITS_SILVER_KEY=""
 
 # fetch_app_key <app_name> -> echoes the consumer key or empty string
 fetch_app_key() {
@@ -140,6 +146,13 @@ fetch_keys_for_demo() {
       LLM_SECURITY_KEY=$(fetch_app_key "llm-security-app-v2")
       demo_smoke_key="$LLM_SECURITY_KEY"
       ;;
+    llm-token-limits-v2)
+      LLM_TOKEN_LIMITS_BRONZE_KEY=$(fetch_app_key_for_product \
+        "ai-consumer-app-v2" "ai-product-bronze-v2")
+      LLM_TOKEN_LIMITS_SILVER_KEY=$(fetch_app_key_for_product \
+        "ai-consumer-app-v2" "ai-product-silver-v2")
+      demo_smoke_key="$LLM_TOKEN_LIMITS_BRONZE_KEY"
+      ;;
   esac
 }
 
@@ -164,6 +177,25 @@ run_smoke_test() {
       code=$(smoke_test_proxy "$label" POST "$url" \
               -H "Content-Type: application/json" \
               -H "x-apikey: $smoke_key" \
+              -d "$body")
+      curl_ok=$?
+      ;;
+    llm-token-limits-v2)
+      url="https://$APIGEE_HOST/v2/samples/llm-token-limits/v1/projects/$PROJECT_ID/locations/$REGION/publishers/google/models/$MODEL_NAME:generateContent"
+      # No generationConfig: with Gemini 2.5 Flash thinking enabled by default,
+      # a tight maxOutputTokens cap (e.g. 8) gets consumed by thinking, the
+      # response comes back without candidatesTokenCount, and the proxy's
+      # LTQ-TokenCount policy faults with FailedToResolveTokenUsageCount → 500.
+      # The default config produces a short reply at ~50-100 tokens, well below
+      # the bronze 2000-token/5-min quota.
+      body='{"contents":[{"role":"user","parts":[{"text":"ping"}]}]}'
+      # The sibling proxy's target XML has no <GoogleAccessToken>, so Vertex
+      # expects the caller to attach the OAuth bearer token (same pattern the
+      # notebook uses via google-genai). Mint it from the operator's ADC.
+      code=$(smoke_test_proxy "$label" POST "$url" \
+              -H "Content-Type: application/json" \
+              -H "x-apikey: $smoke_key" \
+              -H "Authorization: Bearer $(gcloud auth print-access-token)" \
               -d "$body")
       curl_ok=$?
       ;;
@@ -247,9 +279,10 @@ secret_status=""
 # Derive statuses (indexes match demo_labels order).
 BASIC_QUOTA_STATUS=$(derive_demo_status "${demo_deploy_status[0]}" "${demo_test_status[0]}")
 LLM_SECURITY_STATUS=$(derive_demo_status "${demo_deploy_status[1]}" "${demo_test_status[1]}")
-export BASIC_QUOTA_STATUS LLM_SECURITY_STATUS
+LLM_TOKEN_LIMITS_STATUS=$(derive_demo_status "${demo_deploy_status[2]}" "${demo_test_status[2]}")
+export BASIC_QUOTA_STATUS LLM_SECURITY_STATUS LLM_TOKEN_LIMITS_STATUS
 
-if [[ -z "$BASIC_QUOTA_PREMIUM_KEY" || -z "$LLM_SECURITY_KEY" ]]; then
+if [[ -z "$BASIC_QUOTA_PREMIUM_KEY" || -z "$LLM_SECURITY_KEY" || -z "$LLM_TOKEN_LIMITS_BRONZE_KEY" || -z "$LLM_TOKEN_LIMITS_SILVER_KEY" ]]; then
   secret_status="skipped (no usable keys)"
 else
   tmpfile=$(mktemp /tmp/superdemo-config.XXXXXX.json)

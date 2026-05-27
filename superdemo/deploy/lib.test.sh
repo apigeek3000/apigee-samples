@@ -30,7 +30,6 @@ assert_equal "undeployed" "$(derive_demo_status 'deploy-failed' 'skipped (deploy
 echo
 echo "build_secret_payload: writes nested-shape superdemo-config JSON"
 (
-  # Subshell isolates the exported vars from anything below.
   export APIGEE_HOST="apigee.test.example.com"
   export PROJECT_ID="test-project"
   export BASIC_QUOTA_TRIAL_KEY="trial-key-123"
@@ -40,6 +39,10 @@ echo "build_secret_payload: writes nested-shape superdemo-config JSON"
   export MODEL_NAME="gemini-fake"
   export MODEL_ARMOR_REGION="us-central1"
   export LLM_SECURITY_STATUS="failing"
+  export LLM_TOKEN_LIMITS_BRONZE_KEY="bronze-key-001"
+  export LLM_TOKEN_LIMITS_SILVER_KEY="silver-key-002"
+  export LLM_TOKEN_LIMITS_STATUS="passing"
+  export REGION="us-east1"
 
   tmpfile=$(mktemp /tmp/superdemo-payload.XXXXXX.json)
   build_secret_payload "$tmpfile"
@@ -61,6 +64,16 @@ echo "build_secret_payload: writes nested-shape superdemo-config JSON"
       "model_name": "gemini-fake",
       "model_armor_region": "us-central1",
       "status": "failing"
+    },
+    "llm-token-limits-v2": {
+      "bronze_key": "bronze-key-001",
+      "silver_key": "silver-key-002",
+      "status": "passing",
+      "bronze_token_limit": 2000,
+      "silver_token_limit": 5000,
+      "interval_minutes": 5,
+      "model": "gemini-fake",
+      "region": "us-east1"
     }
   }
 }
@@ -68,10 +81,54 @@ JSON
 )
 
   if [[ "$actual" == "$expected" ]]; then
-    echo "PASS:   demos.{basic-quota,llm-security} populated from 9 globals"
+    echo "PASS:   demos.{basic-quota,llm-security,llm-token-limits-v2} populated"
   else
-    echo "FAIL:   demos.{basic-quota,llm-security} populated from 9 globals — diff:"
+    echo "FAIL:   payload mismatch — diff:"
     diff <(echo "$expected") <(echo "$actual") || true
+    exit 1
+  fi
+) || fail=1
+
+echo
+echo "fetch_app_key_for_product: extracts the right credential via jq"
+(
+  # Stub apigeecli to return a canned apps-get payload with two credentials.
+  stub_dir=$(mktemp -d /tmp/superdemo-stub.XXXXXX)
+  cat > "$stub_dir/apigeecli" <<'STUB'
+#!/bin/bash
+cat <<'JSON'
+[
+  {
+    "name": "ai-consumer-app-v2",
+    "credentials": [
+      {
+        "consumerKey": "bronze-key-abc",
+        "apiProducts": [{ "apiproduct": "ai-product-bronze-v2" }]
+      },
+      {
+        "consumerKey": "silver-key-xyz",
+        "apiProducts": [{ "apiproduct": "ai-product-silver-v2" }]
+      }
+    ]
+  }
+]
+JSON
+STUB
+  chmod +x "$stub_dir/apigeecli"
+  export PATH="$stub_dir:$PATH"
+  export PROJECT=fake
+  export TOKEN=fake
+
+  bronze=$(fetch_app_key_for_product "ai-consumer-app-v2" "ai-product-bronze-v2")
+  silver=$(fetch_app_key_for_product "ai-consumer-app-v2" "ai-product-silver-v2")
+  missing=$(fetch_app_key_for_product "ai-consumer-app-v2" "ai-product-gold-v2")
+
+  rm -rf "$stub_dir"
+
+  if [[ "$bronze" == "bronze-key-abc" && "$silver" == "silver-key-xyz" && -z "$missing" ]]; then
+    echo "PASS:   bronze/silver keys picked; unknown product returns empty"
+  else
+    echo "FAIL:   got bronze='$bronze' silver='$silver' missing='$missing'"
     exit 1
   fi
 ) || fail=1

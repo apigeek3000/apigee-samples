@@ -1,8 +1,8 @@
 # Superdemo
 
-A browser-based playground for the `basic-quota` and `llm-security-v2` Apigee
-sample proxies. It replaces hand-rolled `curl` commands with a UI that
-visualizes quota enforcement and Model Armor in action.
+A browser-based playground for the `basic-quota`, `llm-security-v2`, and
+`llm-token-limits-v2` Apigee sample proxies. It replaces hand-rolled `curl`
+commands with a UI that visualizes quota enforcement and Model Armor in action.
 
 A FastAPI backend reads the deployed API keys from Google Cloud Secret Manager
 and acts as a signed reverse proxy, so keys never reach the browser. A React
@@ -36,7 +36,7 @@ gcloud auth application-default set-quota-project $GOOGLE_CLOUD_PROJECT
 ```bash
 cp ./superdemo/deploy/env.sh ./superdemo/deploy/secret.sh
 ```
-2. Edit [`superdemo/deploy/secret.sh`](deploy/secret.sh) — fill in with your values
+2. Edit [`superdemo/deploy/secret.sh`](deploy/secret.sh) — fill in with your values. Note that `REGION` points to a Vertex AI region used by the `llm-token-limits-v2` demo.
 3. Source it:
 ```bash
 source ./superdemo/deploy/secret.sh
@@ -47,15 +47,6 @@ source ./superdemo/deploy/secret.sh
 ```
 
 To tear everything down: `./superdemo/deploy/clean-superdemo.sh`.
-
-## Demo status indicators
-
-The sidebar shows a colored dot next to each demo: green for passing, amber
-for failing, red for undeployed, gray for unknown. The toggle at the bottom
-of the sidebar hides the dots — useful during live customer demos when you'd
-rather not advertise that something is currently broken. The setting persists
-in localStorage. Status is set by `deploy-superdemo.sh` at the end of each
-run, so re-running it refreshes every demo's status.
 
 ## Local dev
 
@@ -82,3 +73,12 @@ http://localhost:8000/docs and ReDoc at http://localhost:8000/redoc. The
 raw OpenAPI schema is at http://localhost:8000/openapi.json.
 
 Tests: `npm test` in `superdemo/frontend/`, `uv run pytest` in `superdemo/backend/`, and `bash superdemo/deploy/lib.test.sh` for the bash helpers.
+
+## Demo status indicators
+
+The sidebar shows a colored dot next to each demo: green for passing, amber
+for failing, red for undeployed, gray for unknown. The toggle at the bottom
+of the sidebar hides the dots — useful during live customer demos when you'd
+rather not advertise that something is currently broken. The setting persists
+in localStorage. Status is set by `deploy-superdemo.sh` at the end of each
+run, so re-running it refreshes every demo's status.

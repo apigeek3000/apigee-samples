@@ -34,6 +34,10 @@ export APIGEE_HOST="<your-apigee-host>"
 # https://docs.cloud.google.com/model-armor/data-residency
 export MODEL_ARMOR_REGION="<your-model-armor-region>"
 
+# Vertex AI region for llm-token-limits-v2 (used by the sibling sample's
+# vertex_config.properties). Often the same as MODEL_ARMOR_REGION.
+export REGION="<your-vertex-region>"
+
 # Defaults — change only if you've customized your setup
 export SERVICE_ACCOUNT_NAME="llm-security-v2-svc-acct"
 export MODEL_ARMOR_TEMPLATE_ID="apigee-modelarmor-template"

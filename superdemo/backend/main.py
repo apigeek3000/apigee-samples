@@ -17,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from google.cloud import secretmanager
 import google.auth
 import google.auth.exceptions
+import google.auth.transport.requests
 import httpx
 import os
 import json
@@ -41,6 +42,24 @@ app.add_middleware(
 
 # ── Config cache ──────────────────────────────────────────────────────
 _config_cache: dict | None = None
+
+# ── Vertex AI bearer token (ADC) ──────────────────────────────────────
+# llm-token-limits-v2 deliberately doesn't mint a token in the proxy; it
+# expects the caller to attach Authorization: Bearer <token>. Mint one
+# here using Application Default Credentials so the same proxy works from
+# a browser, mirroring how the google-genai SDK does it from a notebook.
+_VERTEX_SCOPE = "https://www.googleapis.com/auth/cloud-platform"
+_credentials = None
+
+
+def _get_bearer_token() -> str:
+    """Return a fresh OAuth bearer token for Vertex AI via ADC."""
+    global _credentials
+    if _credentials is None:
+        _credentials, _ = google.auth.default(scopes=[_VERTEX_SCOPE])
+    if not _credentials.valid:
+        _credentials.refresh(google.auth.transport.requests.Request())
+    return _credentials.token
 
 
 def get_config() -> dict:
@@ -97,6 +116,16 @@ DEMO_METADATA = {
         "for threat protection before forwarding to Vertex AI.",
         "icon": "🛡️",
     },
+    "llm-token-limits-v2": {
+        "id": "llm-token-limits-v2",
+        "title": "LLM Rate Limiting",
+        "description": (
+            "Demonstrates Apigee's LLMTokenQuota AI policy. Bronze tier "
+            "allows 2000 tokens per 5 minutes; silver allows 5000. Same "
+            "prompt is sent to both tiers in parallel."
+        ),
+        "icon": "⚡",
+    },
 }
 
 
@@ -105,6 +134,17 @@ def _demo_with_metadata(demo: dict, demo_config: dict) -> dict:
     enriched = {**demo, "status": demo_config.get("status", "unknown")}
     if demo["id"] == "llm-security":
         for field in ("model_name", "model_armor_region"):
+            value = demo_config.get(field)
+            if value is not None:
+                enriched[field] = value
+    elif demo["id"] == "llm-token-limits-v2":
+        for field in (
+            "bronze_token_limit",
+            "silver_token_limit",
+            "interval_minutes",
+            "model",
+            "region",
+        ):
             value = demo_config.get(field)
             if value is not None:
                 enriched[field] = value
@@ -165,6 +205,13 @@ async def proxy_request(demo_name: str, path: str, request: Request):
         llm_security = config.get("demos", {}).get("llm-security", {})
         api_key = llm_security.get("key")
         target_url = f"https://{host}/v2/samples/llm-security/{path}"
+    elif demo_name == "llm-token-limits-v2":
+        tier = request.headers.get("x-rate-limit-tier", "bronze")
+        if tier not in ("bronze", "silver"):
+            tier = "bronze"
+        block = config.get("demos", {}).get("llm-token-limits-v2", {})
+        api_key = block.get(f"{tier}_key")
+        target_url = f"https://{host}/v2/samples/llm-token-limits/{path}"
     else:
         raise HTTPException(status_code=404, detail=f"Unknown demo: {demo_name}")
 
@@ -181,6 +228,21 @@ async def proxy_request(demo_name: str, path: str, request: Request):
         if k.lower() not in drop_headers
     }
     out_headers["x-apikey"] = api_key
+
+    # llm-token-limits-v2's target XML has no <GoogleAccessToken>, so
+    # Vertex expects the caller to supply the OAuth bearer token.
+    if demo_name == "llm-token-limits-v2":
+        try:
+            out_headers["Authorization"] = f"Bearer {_get_bearer_token()}"
+        except google.auth.exceptions.DefaultCredentialsError as e:
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "No Google Cloud credentials available. Run "
+                    "`gcloud auth application-default login` for local "
+                    "dev, or attach a service account when deployed."
+                ),
+            ) from e
 
     # For basic-quota the proxy expects the key as a query param
     params = dict(request.query_params)

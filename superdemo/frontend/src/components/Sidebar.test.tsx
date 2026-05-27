@@ -93,4 +93,20 @@ describe('Sidebar', () => {
     )
     expect(onShowStatusChange).toHaveBeenCalledWith(true)
   })
+
+  it('renders an item for llm-token-limits-v2 when provided', () => {
+    renderSidebar({
+      demos: [
+        {
+          id: 'llm-token-limits-v2',
+          title: 'LLM Rate Limiting',
+          description: 'd',
+          icon: '⚡',
+          status: 'passing',
+        },
+      ],
+      showStatus: true,
+    })
+    expect(screen.getByText('LLM Rate Limiting')).toBeInTheDocument()
+  })
 })

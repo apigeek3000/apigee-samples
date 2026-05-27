@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach, type Mock } from 'vitest'
+import { describe, it, expect, vi, afterEach, beforeEach, type Mock } from 'vitest'
 import {
   fetchDemos,
   parseQuotaResponse,
@@ -107,6 +107,53 @@ describe('fetchDemos', () => {
       status: 500,
       message: 'config missing',
       body: { detail: 'config missing' },
+    })
+  })
+
+  it('preserves demo-specific extension fields through normalization', async () => {
+    const fetch = mockFetch()
+    fetch.mockResolvedValueOnce(
+      jsonResponse({
+        status: 'ready',
+        project_id: 'my-proj',
+        demos: [
+          {
+            id: 'llm-security',
+            title: 'LLM Security',
+            description: 'd',
+            icon: 'i',
+            status: 'passing',
+            model_name: 'gemini-2.5-flash',
+            model_armor_region: 'us-central1',
+          },
+          {
+            id: 'llm-token-limits-v2',
+            title: 'LLM Rate Limiting',
+            description: 'd',
+            icon: 'i',
+            status: 'failing',
+            bronze_token_limit: 2000,
+            silver_token_limit: 5000,
+            interval_minutes: 5,
+            model: 'gemini-2.5-flash',
+            region: 'us-central1',
+          },
+        ],
+      }),
+    )
+
+    const result = await fetchDemos()
+
+    expect(result.demos[0]).toMatchObject({
+      model_name: 'gemini-2.5-flash',
+      model_armor_region: 'us-central1',
+    })
+    expect(result.demos[1]).toMatchObject({
+      bronze_token_limit: 2000,
+      silver_token_limit: 5000,
+      interval_minutes: 5,
+      model: 'gemini-2.5-flash',
+      region: 'us-central1',
     })
   })
 })
@@ -239,5 +286,94 @@ describe('fetchDemos status normalization', () => {
     )
     const result = await fetchDemos()
     expect(result.demos[0].status).toBe('unknown')
+  })
+})
+
+import { sendLlmRateLimiting } from './api'
+
+describe('sendLlmRateLimiting', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('POSTs to the expected path with the tier header and JSON body', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          candidates: [{ content: { parts: [{ text: 'hello' }] } }],
+          usageMetadata: {
+            promptTokenCount: 5,
+            candidatesTokenCount: 3,
+            totalTokenCount: 8,
+          },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    )
+
+    const result = await sendLlmRateLimiting({
+      tier: 'silver',
+      contents: [{ role: 'user', parts: [{ text: 'hi' }] }],
+      projectId: 'proj',
+      region: 'us-central1',
+      model: 'gemini-2.5-flash',
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe(
+      '/api/proxy/llm-token-limits-v2/v1/projects/proj/locations/us-central1/publishers/google/models/gemini-2.5-flash:generateContent',
+    )
+    expect((init as RequestInit).method).toBe('POST')
+    const headers = new Headers((init as RequestInit).headers)
+    expect(headers.get('x-rate-limit-tier')).toBe('silver')
+    expect(headers.get('content-type')).toBe('application/json')
+    expect((init as RequestInit).body).toBe(
+      JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'hi' }] }] }),
+    )
+
+    expect(result.text).toBe('hello')
+    expect(result.totalTokens).toBe(8)
+  })
+
+  it('throws an ApiError on non-2xx, preserving status + body', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({ fault: { faultstring: 'Rate limit quota violation' } }),
+        { status: 429, headers: { 'content-type': 'application/json' } },
+      ),
+    )
+
+    await expect(
+      sendLlmRateLimiting({
+        tier: 'bronze',
+        contents: [],
+        projectId: 'p',
+        region: 'r',
+        model: 'm',
+      }),
+    ).rejects.toMatchObject({ status: 429 })
+  })
+
+  it('handles a malformed response (missing usageMetadata) by surfacing undefined token counts', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          candidates: [{ content: { parts: [{ text: 'broken' }] } }],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    )
+
+    const result = await sendLlmRateLimiting({
+      tier: 'bronze',
+      contents: [],
+      projectId: 'p',
+      region: 'r',
+      model: 'm',
+    })
+
+    expect(result.text).toBe('broken')
+    expect(result.totalTokens).toBeUndefined()
   })
 })

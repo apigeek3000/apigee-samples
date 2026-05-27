@@ -1,0 +1,81 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.header h2 {
+  margin: 0 0 4px 0;
+}
+
+.header p {
+  margin: 0;
+  color: var(--text-dim);
+}
+
+.panes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .panes {
+    grid-template-columns: 1fr;
+  }
+}
+
+.inputRow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.textarea {
+  min-height: 80px;
+  font-family: inherit;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  resize: vertical;
+}
+
+.textarea:disabled {
+  background: var(--bg);
+  cursor: not-allowed;
+}
+
+.actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.meta {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.burstBtn {
+  font-size: 13px;
+  padding: 6px 12px;
+}
+
+.sendBtn {
+  font-size: 13px;
+  padding: 6px 14px;
+}
+
+.sendBtn:disabled,
+.burstBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btnGroup {
+  display: flex;
+  gap: 8px;
+}
