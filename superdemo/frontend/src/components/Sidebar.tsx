@@ -14,6 +14,7 @@ const STATUS_DOT_CLASS: Record<DemoStatus, string> = {
   failing: styles.statusDotFailing,
   undeployed: styles.statusDotUndeployed,
   unknown: styles.statusDotUnknown,
+  placeholder: styles.statusDotPlaceholder,
 }
 
 const STATUS_LABEL: Record<DemoStatus, string> = {
@@ -21,6 +22,7 @@ const STATUS_LABEL: Record<DemoStatus, string> = {
   failing: 'Status: failing',
   undeployed: 'Status: undeployed',
   unknown: 'Status: unknown',
+  placeholder: 'Status: not yet implemented',
 }
 
 export function Sidebar({

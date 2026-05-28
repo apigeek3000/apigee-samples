@@ -109,4 +109,44 @@ describe('Sidebar', () => {
     })
     expect(screen.getByText('LLM Rate Limiting')).toBeInTheDocument()
   })
+
+  it('renders a purple status dot with the "not yet implemented" label for placeholder demos', () => {
+    renderSidebar({
+      demos: [
+        {
+          id: 'llm-routing',
+          title: 'LLM Model Routing',
+          description: 'd',
+          icon: '🔀',
+          status: 'placeholder',
+          placeholder: true,
+        },
+      ],
+      showStatus: true,
+    })
+    expect(
+      screen.getByLabelText('Status: not yet implemented'),
+    ).toBeInTheDocument()
+  })
+
+  it('keeps placeholder rows clickable', async () => {
+    const onSelect = vi.fn()
+    renderSidebar({
+      demos: [
+        {
+          id: 'llm-routing',
+          title: 'LLM Model Routing',
+          description: 'd',
+          icon: '🔀',
+          status: 'placeholder',
+          placeholder: true,
+        },
+      ],
+      onSelect,
+    })
+    await userEvent.click(
+      screen.getByRole('button', { name: /LLM Model Routing/i }),
+    )
+    expect(onSelect).toHaveBeenCalledWith('llm-routing')
+  })
 })

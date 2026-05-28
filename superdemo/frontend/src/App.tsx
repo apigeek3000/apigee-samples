@@ -6,6 +6,7 @@ import { StatusBanner } from './components/StatusBanner'
 import { BasicQuotaDemo } from './components/BasicQuotaDemo'
 import { LlmSecurityDemo } from './components/LlmSecurityDemo'
 import { LlmRateLimitingDemo } from './components/LlmRateLimitingDemo'
+import { PlaceholderDemo } from './components/PlaceholderDemo'
 import { EmptyState } from './components/EmptyState'
 import { useShowStatus } from './hooks/useShowStatus'
 
@@ -43,11 +44,12 @@ export function App() {
       <main className="app__main">
         <StatusBanner demos={demos} error={error} />
         {activeDemo === null && <EmptyState />}
-        {activeDemo?.id === 'basic-quota' && <BasicQuotaDemo />}
-        {activeDemo?.id === 'llm-security' && demos && (
+        {activeDemo?.placeholder && <PlaceholderDemo demo={activeDemo} />}
+        {!activeDemo?.placeholder && activeDemo?.id === 'basic-quota' && <BasicQuotaDemo />}
+        {!activeDemo?.placeholder && activeDemo?.id === 'llm-security' && demos && (
           <LlmSecurityDemo demos={demos} demo={activeDemo} />
         )}
-        {activeDemo?.id === 'llm-token-limits-v2' && demos && (
+        {!activeDemo?.placeholder && activeDemo?.id === 'llm-token-limits-v2' && demos && (
           <LlmRateLimitingDemo demos={demos} demo={activeDemo} />
         )}
       </main>

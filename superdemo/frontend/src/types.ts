@@ -1,4 +1,4 @@
-export type DemoStatus = 'passing' | 'failing' | 'undeployed' | 'unknown'
+export type DemoStatus = 'passing' | 'failing' | 'undeployed' | 'unknown' | 'placeholder'
 
 export interface DemoMetadata {
   id: string
@@ -6,6 +6,8 @@ export interface DemoMetadata {
   description: string
   icon: string
   status: DemoStatus
+  /** True for sidebar placeholders that are not yet wired up. */
+  placeholder?: boolean
   /** Present only on the `llm-security` demo. */
   model_name?: string
   /** Present only on the `llm-security` demo. */

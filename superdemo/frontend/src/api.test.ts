@@ -156,6 +156,30 @@ describe('fetchDemos', () => {
       region: 'us-central1',
     })
   })
+
+  it('passes placeholder status and placeholder flag through normalization', async () => {
+    const fetch = mockFetch()
+    fetch.mockResolvedValueOnce(
+      jsonResponse({
+        status: 'ready',
+        demos: [
+          {
+            id: 'llm-routing',
+            title: 'LLM Model Routing',
+            description: 'd',
+            icon: '🔀',
+            status: 'placeholder',
+            placeholder: true,
+          },
+        ],
+      }),
+    )
+
+    const result = await fetchDemos()
+
+    expect(result.demos[0].status).toBe('placeholder')
+    expect(result.demos[0].placeholder).toBe(true)
+  })
 })
 
 describe('sendBasicQuota', () => {

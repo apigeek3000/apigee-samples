@@ -94,7 +94,7 @@ def test_list_demos_unconfigured():
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "unconfigured"
-    assert len(data["demos"]) == 3
+    assert len(data["demos"]) == 9
 
 
 def test_list_demos_returns_metadata():
@@ -219,7 +219,11 @@ def test_list_demos_includes_status(fake_config):
     response = client.get("/api/demos")
     assert response.status_code == 200
     data = response.json()
-    statuses = {d["id"]: d["status"] for d in data["demos"]}
+    statuses = {
+        d["id"]: d["status"]
+        for d in data["demos"]
+        if not d.get("placeholder")
+    }
     assert statuses == {
         "basic-quota": "passing",
         "llm-security": "passing",
@@ -228,11 +232,13 @@ def test_list_demos_includes_status(fake_config):
 
 
 def test_list_demos_missing_demos_block(fake_config):
-    """No `demos` key in the config → all demos report status=unknown."""
+    """No `demos` key in the config → all real demos report status=unknown."""
     del fake_config["demos"]
     response = client.get("/api/demos")
     data = response.json()
     for demo in data["demos"]:
+        if demo.get("placeholder"):
+            continue
         assert demo["status"] == "unknown"
 
 
@@ -256,11 +262,13 @@ def test_list_demos_unrecognized_status_passes_through(fake_config):
 
 
 def test_unconfigured_demos_all_unknown():
-    """No config at all → every demo gets status=unknown."""
+    """No config at all → every real demo gets status=unknown."""
     response = client.get("/api/demos")
     data = response.json()
     assert data["status"] == "unconfigured"
     for demo in data["demos"]:
+        if demo.get("placeholder"):
+            continue
         assert demo["status"] == "unknown"
 
 
@@ -426,3 +434,45 @@ def test_proxy_llm_token_limits_missing_adc_returns_500(fake_config, monkeypatch
 
     assert response.status_code == 500
     assert "gcloud auth application-default login" in response.json()["detail"]
+
+
+PLACEHOLDER_DEMO_IDS = {
+    "llm-semantic-cache-v2",
+    "llm-routing",
+    "llm-circuit-breaking",
+    "llm-logging",
+    "llm-token-limits-per-user",
+    "llm-function-calling",
+}
+
+
+def test_list_demos_includes_six_placeholder_demos():
+    """All six placeholder demos appear with status=placeholder and placeholder=True."""
+    response = client.get("/api/demos")
+    data = response.json()
+    by_id = {d["id"]: d for d in data["demos"]}
+
+    for pid in PLACEHOLDER_DEMO_IDS:
+        assert pid in by_id, f"missing placeholder demo: {pid}"
+        assert by_id[pid]["status"] == "placeholder"
+        assert by_id[pid]["placeholder"] is True
+
+
+def test_placeholder_status_overrides_stale_secret(fake_config):
+    """Even if the secret has stale data for a placeholder id, status stays 'placeholder'."""
+    fake_config["demos"]["llm-routing"] = {"status": "passing", "key": "stale-key"}
+    response = client.get("/api/demos")
+    data = response.json()
+    routing = next(d for d in data["demos"] if d["id"] == "llm-routing")
+    assert routing["status"] == "placeholder"
+    assert routing["placeholder"] is True
+
+
+def test_real_demos_are_not_marked_as_placeholder():
+    """The three real demos must not carry placeholder=True."""
+    response = client.get("/api/demos")
+    data = response.json()
+    real_ids = {"basic-quota", "llm-security", "llm-token-limits-v2"}
+    for demo in data["demos"]:
+        if demo["id"] in real_ids:
+            assert demo.get("placeholder") is not True

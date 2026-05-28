@@ -124,3 +124,54 @@ describe('App — sidebar navigation', () => {
     expect(screen.getByLabelText('Silver')).toBeInTheDocument()
   })
 })
+
+describe('App — placeholder demos', () => {
+  it('renders PlaceholderDemo when a placeholder demo is active', async () => {
+    vi.mocked(fetchDemos).mockResolvedValueOnce({
+      status: 'ready',
+      host: 'h',
+      project_id: 'p',
+      demos: [
+        {
+          id: 'llm-routing',
+          title: 'LLM Model Routing',
+          description: 'Routes prompts between cheap and premium models.',
+          icon: '🔀',
+          status: 'placeholder',
+          placeholder: true,
+        },
+      ],
+    })
+
+    render(<App />)
+
+    expect(
+      await screen.findByRole('heading', { level: 2, name: /LLM Model Routing/i }),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/not yet implemented/i)).toBeInTheDocument()
+  })
+
+  it('does not render a real demo component when the active demo is a placeholder', async () => {
+    vi.mocked(fetchDemos).mockResolvedValueOnce({
+      status: 'ready',
+      host: 'h',
+      project_id: 'p',
+      demos: [
+        {
+          id: 'llm-routing',
+          title: 'LLM Model Routing',
+          description: 'd',
+          icon: '🔀',
+          status: 'placeholder',
+          placeholder: true,
+        },
+      ],
+    })
+
+    render(<App />)
+
+    await screen.findByText(/not yet implemented/i)
+    // No real demo's "Send" button should be present.
+    expect(screen.queryByRole('button', { name: /^Send$/i })).not.toBeInTheDocument()
+  })
+})

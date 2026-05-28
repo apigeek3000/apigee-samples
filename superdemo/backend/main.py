@@ -126,11 +126,67 @@ DEMO_METADATA = {
         ),
         "icon": "⚡",
     },
+    "llm-semantic-cache-v2": {
+        "id": "llm-semantic-cache-v2",
+        "title": "LLM Semantic Cache",
+        "description": (
+            "Caches semantically-similar prompts to cut LLM cost and latency."
+        ),
+        "icon": "🧠",
+        "placeholder": True,
+    },
+    "llm-routing": {
+        "id": "llm-routing",
+        "title": "LLM Model Routing",
+        "description": (
+            "Routes prompts between cheap and premium models based on policy."
+        ),
+        "icon": "🔀",
+        "placeholder": True,
+    },
+    "llm-circuit-breaking": {
+        "id": "llm-circuit-breaking",
+        "title": "LLM Circuit Breaking",
+        "description": (
+            "Fails over to a backup model when the primary LLM endpoint degrades."
+        ),
+        "icon": "🚧",
+        "placeholder": True,
+    },
+    "llm-logging": {
+        "id": "llm-logging",
+        "title": "LLM Logging",
+        "description": (
+            "Logs prompt/response pairs through Apigee for audit and analytics."
+        ),
+        "icon": "📜",
+        "placeholder": True,
+    },
+    "llm-token-limits-per-user": {
+        "id": "llm-token-limits-per-user",
+        "title": "Per-User Token Limits",
+        "description": (
+            "Enforces per-user LLM token quotas on top of tier-based limits."
+        ),
+        "icon": "👤",
+        "placeholder": True,
+    },
+    "llm-function-calling": {
+        "id": "llm-function-calling",
+        "title": "LLM Function Calling",
+        "description": (
+            "Brokers LLM tool/function calls through Apigee with policy enforcement."
+        ),
+        "icon": "🔧",
+        "placeholder": True,
+    },
 }
 
 
 def _demo_with_metadata(demo: dict, demo_config: dict) -> dict:
     """Enrich a static DEMO_METADATA entry with secret-sourced fields."""
+    if demo.get("placeholder"):
+        return {**demo, "status": "placeholder"}
     enriched = {**demo, "status": demo_config.get("status", "unknown")}
     if demo["id"] == "llm-security":
         for field in ("model_name", "model_armor_region"):

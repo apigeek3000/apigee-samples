@@ -18,6 +18,7 @@ const VALID_STATUSES: ReadonlySet<DemoStatus> = new Set<DemoStatus>([
   'failing',
   'undeployed',
   'unknown',
+  'placeholder',
 ])
 
 function normalizeStatus(value: unknown): DemoStatus {
@@ -35,6 +36,7 @@ function normalizeDemo(raw: unknown): DemoMetadata {
     description: d.description ?? '',
     icon: d.icon ?? '',
     status: normalizeStatus(d.status),
+    placeholder: d.placeholder,
     model_name: d.model_name,
     model_armor_region: d.model_armor_region,
     bronze_token_limit: d.bronze_token_limit,

@@ -75,6 +75,7 @@
 .statusDotFailing    { background: var(--status-failing); }
 .statusDotUndeployed { background: var(--status-undeployed); }
 .statusDotUnknown    { background: var(--status-unknown); }
+.statusDotPlaceholder { background: var(--status-placeholder); }
 
 .spacer {
   flex: 1;
