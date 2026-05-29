@@ -1,0 +1,168 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.header h2 {
+  margin: 0 0 4px 0;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+}
+
+.toolsPanel {
+  background: var(--surface, #1a1a1a);
+  border-radius: 8px;
+  padding: 12px;
+  max-height: 35%;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.toolsPanelHeading {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted, #aaa);
+  margin: 0 0 8px 0;
+}
+
+.toolsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.toolItem {
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--surface-2, #222);
+}
+
+.toolName {
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.toolDescription {
+  font-size: 0.8125rem;
+  color: var(--muted, #bbb);
+  margin-top: 4px;
+  line-height: 1.35;
+}
+
+.toolOp {
+  font-size: 0.75rem;
+  color: var(--muted, #888);
+  margin-top: 4px;
+  font-family: ui-monospace, monospace;
+}
+
+.toolsEmpty {
+  color: var(--muted, #888);
+  font-style: italic;
+}
+
+.chat {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface, #1a1a1a);
+  border-radius: 8px;
+  padding: 12px;
+  min-height: 0;
+}
+
+.messages {
+  flex: 1;
+  min-height: 420px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+}
+
+.bubbleUser {
+  background: var(--user-bubble, #2a3a5a);
+  padding: 8px 12px;
+  border-radius: 12px 12px 0 12px;
+  max-width: 75%;
+  align-self: flex-end;
+}
+
+.bubbleAssistant {
+  background: var(--assistant-bubble, #2a2a2a);
+  padding: 8px 12px;
+  border-radius: 12px 12px 12px 0;
+  max-width: 75%;
+  align-self: flex-start;
+}
+
+.bubbleTool {
+  background: var(--tool-bubble, #1f2f1f);
+  font-family: ui-monospace, monospace;
+  font-size: 0.8125rem;
+  padding: 8px 12px;
+  border-radius: 8px;
+  max-width: 85%;
+  align-self: flex-start;
+}
+
+.bubbleToolError {
+  background: var(--error-bubble, #3a1f1f);
+}
+
+.input {
+  display: flex;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.input input {
+  flex: 1;
+  background: var(--input-bg, #222);
+  border: 1px solid var(--border, #333);
+  color: inherit;
+  padding: 8px 12px;
+  border-radius: 6px;
+}
+
+.input button {
+  padding: 8px 16px;
+  background: var(--primary, #4a7);
+  border: 0;
+  border-radius: 6px;
+  color: white;
+  cursor: pointer;
+}
+
+.input button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.suggested {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 6px 0 0 0;
+}
+
+.suggested button {
+  background: var(--chip, #2a2a2a);
+  border: 1px solid var(--border, #333);
+  color: inherit;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}

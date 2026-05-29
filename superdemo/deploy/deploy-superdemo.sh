@@ -42,6 +42,9 @@ check_shell_variables PROJECT APIGEE_ENV APIGEE_HOST REGION
 # llm-security-v2 also requires these:
 check_shell_variables PROJECT_ID SERVICE_ACCOUNT_NAME MODEL_NAME MODEL_ARMOR_REGION MODEL_ARMOR_TEMPLATE_ID
 
+# apigee-mcp also requires:
+check_shell_variables MCP_SERVICE_ACCOUNT_NAME SA_EMAIL
+
 check_required_commands gcloud jq curl
 
 # Tracks whether anything failed for the final exit code.
@@ -59,6 +62,8 @@ if ! gcloud services enable \
       secretmanager.googleapis.com \
       aiplatform.googleapis.com \
       modelarmor.googleapis.com \
+      run.googleapis.com \
+      apihub.googleapis.com \
       --project="$PROJECT"; then
   api_enable_status="failed"
   overall_failed=1
@@ -72,6 +77,38 @@ insure_apigeecli
 TOKEN=$(gcloud auth print-access-token)
 
 # ====================================================================
+# Provision the apigee-mcp runtime SA + grant roles.
+# The three apigee-mcp proxies (crm-mcp-proxy, customers-api, mcp-spec-tools)
+# are deployed with --sa "$SA_EMAIL". That identity needs roles/run.invoker
+# (to call the Cloud Run targets) and roles/apihub.admin (so mcp-spec-tools
+# can read specs from API hub at runtime).
+# Idempotent: create_service_account_if_necessary is a no-op if the SA exists,
+# and add_roles_to_service_account skips roles that are already bound.
+# ====================================================================
+echo
+echo "============================================="
+echo " Provisioning apigee-mcp service account"
+echo "============================================="
+create_service_account_if_necessary "${MCP_SERVICE_ACCOUNT_NAME}" "${PROJECT_ID}" "Apigee MCP demo runtime SA"
+
+# Grant required roles inline rather than via shlib's add_roles_to_service_account.
+# That helper relies on `declare -n` namerefs (bash 4+); macOS ships bash 3.2 by
+# default, which fails with "declare: -n: invalid option". gcloud's
+# add-iam-policy-binding is itself idempotent, so the simple loop here is
+# functionally equivalent — it just skips the "check before binding" optimization.
+for role in "roles/run.invoker" "roles/apihub.admin"; do
+  echo "  Granting $role to $SA_EMAIL..."
+  if ! gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+        --member="serviceAccount:$SA_EMAIL" \
+        --role="$role" \
+        --condition=None \
+        --quiet >/dev/null; then
+    echo "  WARN: failed to grant $role to $SA_EMAIL"
+    overall_failed=1
+  fi
+done
+
+# ====================================================================
 # Demo registry
 # ====================================================================
 # Parallel arrays indexed by demo position. Adding a new demo means adding
@@ -80,21 +117,25 @@ demo_labels=(
   "basic-quota"
   "llm-security-v2"
   "llm-token-limits-v2"
+  "apigee-mcp"
 )
 demo_proxy_names=(
   "basic-quota"
   "llm-security-v2"
   "llm-token-limits-v2"
+  "crm-mcp-proxy"
 )
 demo_deploy_dirs=(
   "$rootdir/basic-quota"
   "$rootdir/llm-security-v2"
   "$rootdir/llm-token-limits-v2"
+  "$rootdir/apigee-mcp"
 )
 demo_deploy_cmds=(
   "./deploy-basic-quota.sh"
   "./deploy-llm-security-v2.sh"
   "./deploy-llm-token-limits-v2.sh"
+  "./deploy-all.sh"
 )
 
 # Result accumulators, populated by the loop.
@@ -107,6 +148,9 @@ BASIC_QUOTA_PREMIUM_KEY=""
 LLM_SECURITY_KEY=""
 LLM_TOKEN_LIMITS_BRONZE_KEY=""
 LLM_TOKEN_LIMITS_SILVER_KEY=""
+MCP_ENDPOINT=""
+MCP_CLIENT_ID=""
+MCP_CLIENT_SECRET=""
 
 # fetch_app_key <app_name> -> echoes the consumer key or empty string
 fetch_app_key() {
@@ -153,6 +197,12 @@ fetch_keys_for_demo() {
         "ai-consumer-app-v2" "ai-product-silver-v2")
       demo_smoke_key="$LLM_TOKEN_LIMITS_BRONZE_KEY"
       ;;
+    apigee-mcp)
+      MCP_CLIENT_ID=$(fetch_app_key "crm-consumer-app")
+      MCP_CLIENT_SECRET=$(fetch_app_secret "crm-consumer-app")
+      MCP_ENDPOINT="https://${APIGEE_HOST}/crm-mcp-proxy/sse"
+      demo_smoke_key="$MCP_CLIENT_ID"
+      ;;
   esac
 }
 
@@ -198,6 +248,26 @@ run_smoke_test() {
               -H "Authorization: Bearer $(gcloud auth print-access-token)" \
               -d "$body")
       curl_ok=$?
+      ;;
+    apigee-mcp)
+      # crm-mcp-proxy enforces VerifyAPIKey on x-api-key. Connect to the SSE
+      # endpoint and verify at least one `data:` line lands within 10s.
+      # We don't check curl's exit code: curl exits non-zero on `--max-time`
+      # even after streaming valid SSE data, so the presence of `data:` lines
+      # is the authoritative signal.
+      local sse_file
+      sse_file=$(mktemp /tmp/mcp-sse.XXXXXX)
+      curl -s -N --max-time 10 \
+        -H "x-api-key: ${smoke_key}" \
+        "${MCP_ENDPOINT}" 2>/dev/null | head -n 5 > "$sse_file"
+      if grep -q '^data:' "$sse_file"; then
+        rm -f "$sse_file"
+        echo "passed (SSE handshake)"
+        return
+      fi
+      rm -f "$sse_file"
+      echo "failed (no SSE data within 10s)"
+      return
       ;;
     *)
       echo "test-error (unknown demo)"
@@ -280,9 +350,10 @@ secret_status=""
 BASIC_QUOTA_STATUS=$(derive_demo_status "${demo_deploy_status[0]}" "${demo_test_status[0]}")
 LLM_SECURITY_STATUS=$(derive_demo_status "${demo_deploy_status[1]}" "${demo_test_status[1]}")
 LLM_TOKEN_LIMITS_STATUS=$(derive_demo_status "${demo_deploy_status[2]}" "${demo_test_status[2]}")
-export BASIC_QUOTA_STATUS LLM_SECURITY_STATUS LLM_TOKEN_LIMITS_STATUS
+MCP_STATUS=$(derive_demo_status "${demo_deploy_status[3]}" "${demo_test_status[3]}")
+export BASIC_QUOTA_STATUS LLM_SECURITY_STATUS LLM_TOKEN_LIMITS_STATUS MCP_STATUS
 
-if [[ -z "$BASIC_QUOTA_PREMIUM_KEY" || -z "$LLM_SECURITY_KEY" || -z "$LLM_TOKEN_LIMITS_BRONZE_KEY" || -z "$LLM_TOKEN_LIMITS_SILVER_KEY" ]]; then
+if [[ -z "$BASIC_QUOTA_PREMIUM_KEY" || -z "$LLM_SECURITY_KEY" || -z "$LLM_TOKEN_LIMITS_BRONZE_KEY" || -z "$LLM_TOKEN_LIMITS_SILVER_KEY" || -z "$MCP_CLIENT_ID" ]]; then
   secret_status="skipped (no usable keys)"
 else
   tmpfile=$(mktemp /tmp/superdemo-config.XXXXXX.json)

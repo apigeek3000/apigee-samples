@@ -3,6 +3,8 @@ import type {
   DemoMetadata,
   DemoStatus,
   DemosResponse,
+  McpChatEvent,
+  McpTool,
   QuotaResponse,
   QuotaTier,
   RateLimitResponse,
@@ -44,6 +46,7 @@ function normalizeDemo(raw: unknown): DemoMetadata {
     interval_minutes: d.interval_minutes,
     model: d.model,
     region: d.region,
+    mcp_endpoint: d.mcp_endpoint,
   }
 }
 
@@ -214,5 +217,67 @@ function parseRateLimitResponse(raw: unknown): RateLimitResponse {
     text,
     totalTokens: toNumber(usage.totalTokenCount),
     raw,
+  }
+}
+
+export async function fetchMcpTools(): Promise<McpTool[]> {
+  const response = await fetch(`${PROXY_PREFIX}/apigee-mcp/tools`)
+  if (!response.ok) {
+    throw await parseError(response)
+  }
+  return (await response.json()) as McpTool[]
+}
+
+// Note: the backend exposes POST /api/proxy/apigee-mcp/sessions for clients
+// that prefer the server to mint the session id. The browser generates its
+// own UUID via crypto.randomUUID() and doesn't call that endpoint.
+
+export async function streamMcpChat(
+  sessionId: string,
+  prompt: string,
+  onEvent: (event: McpChatEvent) => void,
+): Promise<void> {
+  const response = await fetch(`${PROXY_PREFIX}/apigee-mcp/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id: sessionId, prompt }),
+  })
+  if (!response.ok) {
+    throw await parseError(response)
+  }
+  if (!response.body) {
+    throw {
+      status: 500,
+      message: 'Missing response body for streaming chat',
+    } satisfies ApiError
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    // sse_starlette frames events with \r\n. Normalize so the \n\n
+    // separator search below finds event boundaries.
+    buffer = buffer.replace(/\r\n/g, '\n')
+
+    let sep: number
+    while ((sep = buffer.indexOf('\n\n')) !== -1) {
+      const chunk = buffer.slice(0, sep)
+      buffer = buffer.slice(sep + 2)
+      for (const line of chunk.split('\n')) {
+        if (!line.startsWith('data:')) continue
+        const json = line.slice('data:'.length).trim()
+        if (!json) continue
+        try {
+          onEvent(JSON.parse(json) as McpChatEvent)
+        } catch {
+          // Ignore unparseable lines — backend always emits JSON.
+        }
+      }
+    }
   }
 }

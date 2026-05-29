@@ -7,6 +7,7 @@ import { BasicQuotaDemo } from './components/BasicQuotaDemo'
 import { LlmSecurityDemo } from './components/LlmSecurityDemo'
 import { LlmRateLimitingDemo } from './components/LlmRateLimitingDemo'
 import { PlaceholderDemo } from './components/PlaceholderDemo'
+import { ApigeeMcpDemo } from './components/ApigeeMcpDemo'
 import { EmptyState } from './components/EmptyState'
 import { useShowStatus } from './hooks/useShowStatus'
 
@@ -51,6 +52,9 @@ export function App() {
         )}
         {!activeDemo?.placeholder && activeDemo?.id === 'llm-token-limits-v2' && demos && (
           <LlmRateLimitingDemo demos={demos} demo={activeDemo} />
+        )}
+        {!activeDemo?.placeholder && activeDemo?.id === 'apigee-mcp' && (
+          <ApigeeMcpDemo demo={activeDemo} />
         )}
       </main>
     </div>

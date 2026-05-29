@@ -2,16 +2,19 @@
 
 A browser-based playground for the `basic-quota`, `llm-security-v2`, and
 `llm-token-limits-v2` Apigee sample proxies. It replaces hand-rolled `curl`
-commands with a UI that visualizes quota enforcement and Model Armor in action.
+commands with a UI that visualizes Apigee in action.
 
 A FastAPI backend reads the deployed API keys from Google Cloud Secret Manager
 and acts as a signed reverse proxy, so keys never reach the browser. A React
 SPA renders one view per demo and talks only to the backend.
 
+For a presenter-facing walkthrough of each demo — what to click, what to
+say, what the audience should notice — see [GUIDE.md](GUIDE.md).
+
 ## Prerequisites
 
 **Google Cloud:**
-- A project with [Apigee X provisioned](https://docs.cloud.google.com/apigee/docs/api-platform/get-started/provisioning-intro) and external access configured
+- A GCP project that you are owner of with [Apigee X provisioned](https://docs.cloud.google.com/apigee/docs/api-platform/get-started/provisioning-intro) and external access configured
 - Create your Model Armor template (see [`llm-security-v2/README.md`](../llm-security-v2/README.md))
 
 **Used by the deploy scripts:** [gcloud CLI](https://cloud.google.com/sdk/docs/install),
@@ -72,7 +75,20 @@ Backend API docs: FastAPI auto-generates interactive Swagger UI at
 http://localhost:8000/docs and ReDoc at http://localhost:8000/redoc. The
 raw OpenAPI schema is at http://localhost:8000/openapi.json.
 
-Tests: `npm test` in `superdemo/frontend/`, `uv run pytest` in `superdemo/backend/`, and `bash superdemo/deploy/lib.test.sh` for the bash helpers.
+## Unit testing
+
+Each part of the stack has its own test runner:
+
+```bash
+# Backend (pytest + respx for HTTP mocking)
+cd superdemo/backend && uv run pytest
+
+# Frontend (vitest — single pass, CI mode)
+cd superdemo/frontend && npm test -- --run
+
+# Deploy bash helpers
+bash superdemo/deploy/lib.test.sh
+```
 
 ## Demo status indicators
 

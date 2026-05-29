@@ -40,5 +40,13 @@ export REGION="<your-vertex-region>"
 
 # Defaults — change only if you've customized your setup
 export SERVICE_ACCOUNT_NAME="llm-security-v2-svc-acct"
+export MCP_SERVICE_ACCOUNT_NAME="apigee-mcp-svc-acct"
 export MODEL_ARMOR_TEMPLATE_ID="apigee-modelarmor-template"
 export MODEL_NAME="gemini-2.5-flash"
+
+# Apigee proxy runtime service account for the apigee-mcp demo. deploy-superdemo.sh
+# creates this SA if missing and grants it roles/run.invoker (so the crm-mcp-proxy
+# and customers-api proxies can invoke their Cloud Run targets) and roles/apihub.admin
+# (so mcp-spec-tools can read specs from API hub at runtime). Override SA_EMAIL only
+# if you have a pre-existing SA with these roles you'd rather reuse.
+export SA_EMAIL="${MCP_SERVICE_ACCOUNT_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"

@@ -123,6 +123,7 @@ derive_demo_status() {
 #   LLM_SECURITY_KEY, MODEL_NAME, MODEL_ARMOR_REGION, LLM_SECURITY_STATUS
 #   LLM_TOKEN_LIMITS_BRONZE_KEY, LLM_TOKEN_LIMITS_SILVER_KEY,
 #   LLM_TOKEN_LIMITS_STATUS, REGION
+#   MCP_ENDPOINT, MCP_CLIENT_ID, MCP_CLIENT_SECRET, MCP_STATUS
 #
 # Token limits below are mirrored from llm-token-limits-v2/aiproduct-*.json.
 # If those files change, update these constants. (We do not read them at
@@ -144,6 +145,12 @@ build_secret_payload() {
     --arg ltl_status        "$LLM_TOKEN_LIMITS_STATUS" \
     --arg ltl_region        "$REGION" \
     --arg ltl_model         "$MODEL_NAME" \
+    --arg mcp_endpoint      "$MCP_ENDPOINT" \
+    --arg mcp_client_id     "$MCP_CLIENT_ID" \
+    --arg mcp_client_secret "$MCP_CLIENT_SECRET" \
+    --arg mcp_model         "$MODEL_NAME" \
+    --arg mcp_region        "$REGION" \
+    --arg mcp_status        "$MCP_STATUS" \
     --argjson ltl_bronze    2000 \
     --argjson ltl_silver    5000 \
     --argjson ltl_interval  5 \
@@ -171,6 +178,14 @@ build_secret_payload() {
           interval_minutes:   $ltl_interval,
           model:              $ltl_model,
           region:             $ltl_region
+        },
+        "apigee-mcp": {
+          mcp_endpoint:  $mcp_endpoint,
+          client_id:     $mcp_client_id,
+          client_secret: $mcp_client_secret,
+          model:         $mcp_model,
+          region:        $mcp_region,
+          status:        $mcp_status
         }
       }
     }' > "$out_file"
@@ -197,5 +212,19 @@ fetch_app_key_for_product() {
     echo ""
   else
     echo "$key"
+  fi
+}
+
+# fetch_app_secret <app_name> -> echoes the first credential's consumerSecret or empty string
+fetch_app_secret() {
+  local app_name secret
+  app_name="$1"
+  secret=$(apigeecli apps get --name "$app_name" --org "$PROJECT" \
+        --token "$TOKEN" --disable-check 2>/dev/null \
+        | jq -r '.[0].credentials[0].consumerSecret' 2>/dev/null)
+  if [[ -z "$secret" || "$secret" == "null" ]]; then
+    echo ""
+  else
+    echo "$secret"
   fi
 }

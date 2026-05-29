@@ -401,3 +401,80 @@ describe('sendLlmRateLimiting', () => {
     expect(result.totalTokens).toBeUndefined()
   })
 })
+
+import { fetchMcpTools, streamMcpChat } from './api'
+import type { McpChatEvent } from './types'
+
+describe('fetchMcpTools', () => {
+  it('returns the tools list', async () => {
+    const tools = [
+      { name: 'list_customers', description: 'List', openapi_op: 'GET /customers' },
+    ]
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => tools,
+    } as Response))
+
+    const result = await fetchMcpTools()
+    expect(result).toEqual(tools)
+  })
+
+  it('throws on non-2xx', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      statusText: 'Service Unavailable',
+      text: async () => JSON.stringify({ detail: 'not deployed' }),
+    } as Response))
+
+    await expect(fetchMcpTools()).rejects.toMatchObject({
+      status: 503,
+      message: 'not deployed',
+    })
+  })
+})
+
+describe('streamMcpChat', () => {
+  function makeStreamingResponse(events: McpChatEvent[]): Response {
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const e of events) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(e)}\n\n`))
+        }
+        controller.close()
+      },
+    })
+    return new Response(stream, {
+      status: 200,
+      headers: { 'Content-Type': 'text/event-stream' },
+    })
+  }
+
+  it('emits parsed events in order', async () => {
+    const events: McpChatEvent[] = [
+      { type: 'delta', text: 'A' },
+      { type: 'tool_call', id: 't1', name: 'x', args: {} },
+      { type: 'tool_result', id: 't1', status: 200, body: 'ok' },
+      { type: 'done' },
+    ]
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(makeStreamingResponse(events)))
+
+    const received: McpChatEvent[] = []
+    await streamMcpChat('sess-1', 'hi', (e: McpChatEvent) => received.push(e))
+    expect(received).toEqual(events)
+  })
+
+  it('throws on non-2xx response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      statusText: 'Service Unavailable',
+      text: async () => JSON.stringify({ detail: 'not deployed' }),
+    } as Response))
+
+    await expect(
+      streamMcpChat('sess-1', 'hi', () => undefined),
+    ).rejects.toMatchObject({ status: 503 })
+  })
+})

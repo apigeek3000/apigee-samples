@@ -40,6 +40,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from mcp_routes import router as mcp_router  # noqa: E402
+app.include_router(mcp_router)
+
 # ── Config cache ──────────────────────────────────────────────────────
 _config_cache: dict | None = None
 
@@ -126,6 +129,15 @@ DEMO_METADATA = {
         ),
         "icon": "⚡",
     },
+    "apigee-mcp": {
+        "id": "apigee-mcp",
+        "title": "MCP Server",
+        "description": (
+            "Apigee serves as an MCP server: dynamically discovers tools from "
+            "Apigee API hub specs and exposes them to a streaming AI agent."
+        ),
+        "icon": "🔌",
+    },
     "llm-semantic-cache-v2": {
         "id": "llm-semantic-cache-v2",
         "title": "LLM Semantic Cache",
@@ -201,6 +213,11 @@ def _demo_with_metadata(demo: dict, demo_config: dict) -> dict:
             "model",
             "region",
         ):
+            value = demo_config.get(field)
+            if value is not None:
+                enriched[field] = value
+    elif demo["id"] == "apigee-mcp":
+        for field in ("mcp_endpoint", "model", "region"):
             value = demo_config.get(field)
             if value is not None:
                 enriched[field] = value

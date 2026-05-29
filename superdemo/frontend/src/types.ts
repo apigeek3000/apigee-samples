@@ -22,6 +22,8 @@ export interface DemoMetadata {
   model?: string
   /** Present only on the `llm-token-limits-v2` demo. */
   region?: string
+  /** Present only on the `apigee-mcp` demo. */
+  mcp_endpoint?: string
 }
 
 export interface DemosResponse {
@@ -66,3 +68,19 @@ export interface RateLimitResponse {
   totalTokens?: number
   raw: unknown
 }
+
+// ── Apigee MCP demo ──────────────────────────────────────────────────
+
+export interface McpTool {
+  name: string
+  description: string
+  openapi_op: string
+}
+
+export type McpChatEvent =
+  | { type: 'session_restarted'; session_id: string }
+  | { type: 'delta'; text: string }
+  | { type: 'tool_call'; id: string; name: string; args: Record<string, unknown> }
+  | { type: 'tool_result'; id: string; status: number; body: string }
+  | { type: 'error'; message: string }
+  | { type: 'done' }

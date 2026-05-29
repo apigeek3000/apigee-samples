@@ -43,6 +43,10 @@ echo "build_secret_payload: writes nested-shape superdemo-config JSON"
   export LLM_TOKEN_LIMITS_SILVER_KEY="silver-key-002"
   export LLM_TOKEN_LIMITS_STATUS="passing"
   export REGION="us-east1"
+  export MCP_ENDPOINT="https://apigee.test.example.com/crm-mcp-proxy/sse"
+  export MCP_CLIENT_ID="mcp-key-001"
+  export MCP_CLIENT_SECRET="mcp-secret-002"
+  export MCP_STATUS="passing"
 
   tmpfile=$(mktemp /tmp/superdemo-payload.XXXXXX.json)
   build_secret_payload "$tmpfile"
@@ -74,6 +78,14 @@ echo "build_secret_payload: writes nested-shape superdemo-config JSON"
       "interval_minutes": 5,
       "model": "gemini-fake",
       "region": "us-east1"
+    },
+    "apigee-mcp": {
+      "mcp_endpoint": "https://apigee.test.example.com/crm-mcp-proxy/sse",
+      "client_id": "mcp-key-001",
+      "client_secret": "mcp-secret-002",
+      "model": "gemini-fake",
+      "region": "us-east1",
+      "status": "passing"
     }
   }
 }
@@ -81,7 +93,7 @@ JSON
 )
 
   if [[ "$actual" == "$expected" ]]; then
-    echo "PASS:   demos.{basic-quota,llm-security,llm-token-limits-v2} populated"
+    echo "PASS:   demos.{basic-quota,llm-security,llm-token-limits-v2,apigee-mcp} populated"
   else
     echo "FAIL:   payload mismatch — diff:"
     diff <(echo "$expected") <(echo "$actual") || true
@@ -129,6 +141,75 @@ STUB
     echo "PASS:   bronze/silver keys picked; unknown product returns empty"
   else
     echo "FAIL:   got bronze='$bronze' silver='$silver' missing='$missing'"
+    exit 1
+  fi
+) || fail=1
+
+echo
+echo "fetch_app_secret: extracts the consumerSecret of the first credential"
+(
+  stub_dir=$(mktemp -d /tmp/superdemo-stub.XXXXXX)
+  cat > "$stub_dir/apigeecli" <<'STUB'
+#!/bin/bash
+cat <<'JSON'
+[
+  {
+    "name": "crm-consumer-app",
+    "credentials": [
+      {
+        "consumerKey": "key-abc",
+        "consumerSecret": "secret-xyz"
+      }
+    ]
+  }
+]
+JSON
+STUB
+  chmod +x "$stub_dir/apigeecli"
+  export PATH="$stub_dir:$PATH"
+  export PROJECT=fake
+  export TOKEN=fake
+
+  got=$(fetch_app_secret "crm-consumer-app")
+  rm -rf "$stub_dir"
+
+  if [[ "$got" == "secret-xyz" ]]; then
+    echo "PASS:   consumerSecret returned for first credential"
+  else
+    echo "FAIL:   expected 'secret-xyz', got '$got'"
+    exit 1
+  fi
+) || fail=1
+
+echo
+echo "fetch_app_secret: returns empty when apigeecli output has no secret"
+(
+  stub_dir=$(mktemp -d /tmp/superdemo-stub.XXXXXX)
+  cat > "$stub_dir/apigeecli" <<'STUB'
+#!/bin/bash
+cat <<'JSON'
+[
+  {
+    "name": "crm-consumer-app",
+    "credentials": [
+      { "consumerKey": "key-abc" }
+    ]
+  }
+]
+JSON
+STUB
+  chmod +x "$stub_dir/apigeecli"
+  export PATH="$stub_dir:$PATH"
+  export PROJECT=fake
+  export TOKEN=fake
+
+  got=$(fetch_app_secret "crm-consumer-app")
+  rm -rf "$stub_dir"
+
+  if [[ -z "$got" ]]; then
+    echo "PASS:   missing secret → empty string"
+  else
+    echo "FAIL:   expected empty, got '$got'"
     exit 1
   fi
 ) || fail=1

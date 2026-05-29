@@ -66,6 +66,14 @@ FAKE_CONFIG = {
             "model": "gemini-fake",
             "region": "us-central1",
         },
+        "apigee-mcp": {
+            "mcp_endpoint": "https://apigee.test.example.com/crm-mcp-proxy/sse",
+            "client_id": "fake-client-id",
+            "client_secret": "fake-client-secret",
+            "model": "gemini-fake",
+            "region": "us-central1",
+            "status": "passing",
+        },
     },
 }
 
@@ -94,7 +102,7 @@ def test_list_demos_unconfigured():
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "unconfigured"
-    assert len(data["demos"]) == 9
+    assert len(data["demos"]) == 10
 
 
 def test_list_demos_returns_metadata():
@@ -228,6 +236,7 @@ def test_list_demos_includes_status(fake_config):
         "basic-quota": "passing",
         "llm-security": "passing",
         "llm-token-limits-v2": "passing",
+        "apigee-mcp": "passing",
     }
 
 
@@ -476,3 +485,35 @@ def test_real_demos_are_not_marked_as_placeholder():
     for demo in data["demos"]:
         if demo["id"] in real_ids:
             assert demo.get("placeholder") is not True
+
+
+def test_list_demos_includes_apigee_mcp():
+    """The /api/demos payload includes the apigee-mcp entry with all surfaced fields."""
+    main._config_cache = {
+        "APIGEE_HOST": FAKE_HOST,
+        "PROJECT_ID": "fake-project",
+        "demos": {
+            "apigee-mcp": {
+                "mcp_endpoint": "https://apigee.test.example.com/crm-mcp-proxy/sse",
+                "client_id": "k",
+                "client_secret": "s",
+                "model": "gemini-fake",
+                "region": "us-east1",
+                "status": "passing",
+            },
+        },
+    }
+    try:
+        response = client.get("/api/demos")
+        assert response.status_code == 200
+        mcp = next(d for d in response.json()["demos"] if d["id"] == "apigee-mcp")
+        assert mcp["title"] == "MCP Server"
+        assert mcp["status"] == "passing"
+        assert mcp["mcp_endpoint"] == "https://apigee.test.example.com/crm-mcp-proxy/sse"
+        assert mcp["model"] == "gemini-fake"
+        assert mcp["region"] == "us-east1"
+        # client_id and client_secret must NOT be surfaced to the browser
+        assert "client_id" not in mcp
+        assert "client_secret" not in mcp
+    finally:
+        main._config_cache = None
