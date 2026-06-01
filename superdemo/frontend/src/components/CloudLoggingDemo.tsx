@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { fetchRecentLog, sendCloudLogging } from '../api'
+import { demoInfo } from '../demoInfo'
 import type {
   ApiError,
   CloudLogEntry,
@@ -7,6 +8,7 @@ import type {
   DemoMetadata,
   DemosResponse,
 } from '../types'
+import { MoreInfo } from './MoreInfo'
 import styles from './CloudLoggingDemo.module.css'
 
 interface Props {
@@ -147,6 +149,8 @@ export function CloudLoggingDemo({ demos, demo }: Props) {
           )}
         </section>
       </div>
+
+      <MoreInfo {...demoInfo['cloud-logging']} />
     </div>
   )
 }

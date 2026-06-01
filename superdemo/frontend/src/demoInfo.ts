@@ -79,18 +79,71 @@ export const demoInfo: Record<string, DemoInfo> = {
     ],
     githubHref: `${GITHUB_BASE}/llm-token-limits-v2`,
   },
+  'cloud-logging': {
+    diagram: `flowchart LR
+  Browser([Browser])
+  subgraph Apigee["Apigee Proxy"]
+    ML[MessageLogging]
+  end
+  Backend[(httpbin)]
+  Logs[(Cloud Logging)]
+  Browser <--> Apigee <--> Backend
+  ML -. PostClientFlow .-> Logs`,
+    description:
+      "After the client has its response, Apigee's MessageLogging policy fires in the PostClientFlow and exports per-request metadata to Cloud Logging. The proxy authenticates as a service account holding logging.logEntries.create — the client never needs Cloud credentials.",
+    policyLinks: [
+      {
+        label: 'MessageLogging',
+        href: `${APIGEE_POLICY_BASE}/message-logging-policy`,
+      },
+    ],
+    githubHref: `${GITHUB_BASE}/cloud-logging`,
+  },
+  'threat-protection': {
+    diagram: `flowchart LR
+  Browser([Browser])
+  subgraph Apigee["Apigee Proxy"]
+    RE[RegEx Protection]
+    JT[JSONThreat Protection]
+  end
+  Backend[(httpbin)]
+  Browser -- "GET /json" --> RE --> Backend
+  Browser -- "POST /echo" --> JT --> Backend
+  RE -. 500 on match .-> Browser
+  JT -. 500 on match .-> Browser`,
+    description:
+      'Two policies guard the proxy before requests reach any backend. RegularExpressionProtection blocks query values matching SQL keywords on GET /json; JSONThreatProtection rejects POST /echo bodies that exceed the configured object-key limit. Either match short-circuits with HTTP 500.',
+    policyLinks: [
+      {
+        label: 'RegularExpressionProtection',
+        href: `${APIGEE_POLICY_BASE}/regular-expression-protection`,
+      },
+      {
+        label: 'JSONThreatProtection',
+        href: `${APIGEE_POLICY_BASE}/json-threat-protection-policy`,
+      },
+    ],
+    githubHref: `${GITHUB_BASE}/threat-protection`,
+  },
   'apigee-mcp': {
     diagram: `flowchart LR
-  Agent([Agent])
-  MCP[MCP Server]
-  Hub[(API Hub specs)]
-  Apigee[Apigee Proxies]
-  Backend[(Backends)]
-  Agent <--> MCP
-  MCP --> Hub
-  MCP --> Apigee --> Backend`,
+  Agent[ADK Agent]
+  Vertex[(Vertex AI)]
+  subgraph Apigee["Apigee"]
+    direction TB
+    MCPProxy[crm-mcp-proxy]
+    Specs[mcp-spec-tools]
+    Tools[customers-api]
+  end
+  MCP["MCP Server<br/>(Cloud Run)"]
+  Hub[(API hub)]
+  Backend[("CRM API<br/>(Cloud Run)")]
+  Agent <--> Vertex
+  Agent -- "x-api-key" --> MCPProxy <--> MCP
+  MCP -- "1. discover" --> Specs --> Hub
+  MCP -- "2. invoke" --> Tools --> Backend`,
     description:
-      'An LLM agent discovers tools by reading OpenAPI specs published in Apigee API hub, then invokes those tools through Apigee proxies. Apigee acts as the trust boundary between the agent and the underlying backends.',
+      'The MCP server runs on Cloud Run; the agent never talks to it directly. Three Apigee proxies sit in between: one fronts the MCP server (API-key auth), one surfaces API hub specs for tool discovery, and one fronts the actual backend each tool calls. Apigee is the trust boundary on every hop.',
     policyLinks: [
       {
         label: 'VerifyAPIKey',

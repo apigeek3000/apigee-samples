@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { sendThreatJson, sendThreatRegex } from '../api'
+import { demoInfo } from '../demoInfo'
 import type { DemoMetadata, ThreatResponse } from '../types'
+import { MoreInfo } from './MoreInfo'
 import styles from './ThreatProtectionDemo.module.css'
 
 interface Props {
@@ -154,6 +156,8 @@ export function ThreatProtectionDemo({ demo }: Props) {
 
         {jsonResult && <ResultBlock result={jsonResult} />}
       </section>
+
+      <MoreInfo {...demoInfo['threat-protection']} />
     </div>
   )
 }
