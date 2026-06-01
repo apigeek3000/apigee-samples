@@ -1,18 +1,19 @@
 import { useState } from 'react'
 import { sendThreatJson, sendThreatRegex } from '../api'
-import { demoInfo } from '../demoInfo'
+import { apigeeProxyLinks, demoInfo } from '../demoInfo'
 import type { DemoMetadata, ThreatResponse } from '../types'
 import { MoreInfo } from './MoreInfo'
 import styles from './ThreatProtectionDemo.module.css'
 
 interface Props {
   demo: DemoMetadata
+  projectId?: string | null
 }
 
 const JSON_5_KEY = { f1: 't1', f2: 't2', f3: 't3', f4: 't4', f5: 't5' }
 const JSON_6_KEY = { f1: 't1', f2: 't2', f3: 't3', f4: 't4', f5: 't5', f6: 't6' }
 
-export function ThreatProtectionDemo({ demo }: Props) {
+export function ThreatProtectionDemo({ demo, projectId }: Props) {
   const blockedKeywords = demo.blocked_keywords ?? []
   const maxKeys = demo.max_json_object_keys ?? 5
 
@@ -157,7 +158,10 @@ export function ThreatProtectionDemo({ demo }: Props) {
         {jsonResult && <ResultBlock result={jsonResult} />}
       </section>
 
-      <MoreInfo {...demoInfo['threat-protection']} />
+      <MoreInfo
+        {...demoInfo['threat-protection']}
+        apigeeProxyLinks={apigeeProxyLinks('threat-protection', projectId)}
+      />
     </div>
   )
 }

@@ -1,6 +1,6 @@
-import type { MoreInfoProps, PolicyLink } from './components/MoreInfo'
+import type { ApigeeProxyLink, MoreInfoProps, PolicyLink } from './components/MoreInfo'
 
-export type { PolicyLink }
+export type { ApigeeProxyLink, PolicyLink }
 
 export type DemoInfo = MoreInfoProps
 
@@ -9,6 +9,30 @@ const APIGEE_POLICY_BASE =
 
 const GITHUB_BASE =
   'https://github.com/GoogleCloudPlatform/apigee-samples/tree/main'
+
+// Apigee proxy names deployed by superdemo/deploy/deploy-superdemo.sh.
+// Keep this in lockstep with that script's demo_proxy_names array (and the
+// extra proxies the apigee-mcp deploy-all.sh installs).
+const PROXY_NAMES_BY_DEMO: Record<string, string[]> = {
+  'basic-quota': ['basic-quota'],
+  'llm-security': ['llm-security-v2'],
+  'llm-token-limits-v2': ['llm-token-limits-v2'],
+  'apigee-mcp': ['crm-mcp-proxy', 'customers-api', 'mcp-spec-tools'],
+  'cloud-logging': ['sample-cloud-logging'],
+  'threat-protection': ['threat-protection'],
+}
+
+export function apigeeProxyLinks(
+  demoId: string,
+  projectId: string | null | undefined,
+): ApigeeProxyLink[] {
+  if (!projectId) return []
+  const names = PROXY_NAMES_BY_DEMO[demoId] ?? []
+  return names.map((name) => ({
+    label: name,
+    href: `https://console.cloud.google.com/apigee/proxies/${name}/overview?project=${projectId}`,
+  }))
+}
 
 export const demoInfo: Record<string, DemoInfo> = {
   'basic-quota': {

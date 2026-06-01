@@ -70,6 +70,55 @@ describe('MoreInfo', () => {
     expect(mermaid.render).toHaveBeenCalledTimes(1)
   })
 
+  it('renders Apigee proxy links when apigeeProxyLinks is provided', async () => {
+    render(
+      <MoreInfo
+        {...baseProps}
+        apigeeProxyLinks={[
+          {
+            label: 'basic-quota',
+            href: 'https://console.cloud.google.com/apigee/proxies/basic-quota/overview?project=my-proj',
+          },
+        ]}
+      />,
+    )
+    await userEvent.click(screen.getByText(/more info/i))
+    const link = screen.getByRole('link', { name: /basic-quota/ })
+    expect(link).toHaveAttribute(
+      'href',
+      'https://console.cloud.google.com/apigee/proxies/basic-quota/overview?project=my-proj',
+    )
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'))
+    expect(screen.getByText('Apigee proxy')).toBeInTheDocument()
+  })
+
+  it('pluralises the label when multiple proxy links are provided', async () => {
+    render(
+      <MoreInfo
+        {...baseProps}
+        apigeeProxyLinks={[
+          { label: 'crm-mcp-proxy', href: 'https://example.com/a' },
+          { label: 'customers-api', href: 'https://example.com/b' },
+        ]}
+      />,
+    )
+    await userEvent.click(screen.getByText(/more info/i))
+    expect(screen.getByText('Apigee proxies')).toBeInTheDocument()
+  })
+
+  it('omits the Apigee proxy section when no links are provided', async () => {
+    render(<MoreInfo {...baseProps} />)
+    await userEvent.click(screen.getByText(/more info/i))
+    expect(screen.queryByText(/^Apigee prox/i)).not.toBeInTheDocument()
+  })
+
+  it('omits the Apigee proxy section when an empty array is provided', async () => {
+    render(<MoreInfo {...baseProps} apigeeProxyLinks={[]} />)
+    await userEvent.click(screen.getByText(/more info/i))
+    expect(screen.queryByText(/^Apigee prox/i)).not.toBeInTheDocument()
+  })
+
   it('falls back to a <pre> with raw diagram source when render fails', async () => {
     const mermaid = (await import('mermaid')).default
     ;(mermaid.render as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(

@@ -6,10 +6,16 @@ export interface PolicyLink {
   href: string
 }
 
+export interface ApigeeProxyLink {
+  label: string
+  href: string
+}
+
 export interface MoreInfoProps {
   diagram: string
   description: string
   policyLinks: PolicyLink[]
+  apigeeProxyLinks?: ApigeeProxyLink[]
   githubHref: string
 }
 
@@ -121,6 +127,28 @@ export function MoreInfo(props: MoreInfoProps) {
                 ))}
               </div>
             </div>
+            {props.apigeeProxyLinks && props.apigeeProxyLinks.length > 0 && (
+              <div>
+                <div className={styles.linkGroupLabel}>
+                  {props.apigeeProxyLinks.length === 1
+                    ? 'Apigee proxy'
+                    : 'Apigee proxies'}
+                </div>
+                <div className={styles.linkRow}>
+                  {props.apigeeProxyLinks.map((link) => (
+                    <a
+                      key={link.label}
+                      className={styles.link}
+                      href={link.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {link.label} →
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
             <div>
               <a
                 className={styles.link}

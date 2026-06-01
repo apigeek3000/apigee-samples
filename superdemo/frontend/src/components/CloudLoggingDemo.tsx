@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { fetchRecentLog, sendCloudLogging } from '../api'
-import { demoInfo } from '../demoInfo'
+import { apigeeProxyLinks, demoInfo } from '../demoInfo'
 import type {
   ApiError,
   CloudLogEntry,
@@ -150,7 +150,10 @@ export function CloudLoggingDemo({ demos, demo }: Props) {
         </section>
       </div>
 
-      <MoreInfo {...demoInfo['cloud-logging']} />
+      <MoreInfo
+        {...demoInfo['cloud-logging']}
+        apigeeProxyLinks={apigeeProxyLinks('cloud-logging', demos.project_id)}
+      />
     </div>
   )
 }

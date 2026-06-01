@@ -3,7 +3,7 @@ import { sendLlmSecurity } from '../api'
 import type { ApiError, DemoMetadata, DemosResponse } from '../types'
 import { MoreInfo } from './MoreInfo'
 import { ResponseCard } from './ResponseCard'
-import { demoInfo } from '../demoInfo'
+import { apigeeProxyLinks, demoInfo } from '../demoInfo'
 import styles from './LlmSecurityDemo.module.css'
 
 const SAMPLE_PROMPTS: { label: string; text: string; malicious?: boolean }[] = [
@@ -117,7 +117,10 @@ export function LlmSecurityDemo({ demos, demo }: Props) {
         error={error}
       />
 
-      <MoreInfo {...demoInfo['llm-security']} />
+      <MoreInfo
+        {...demoInfo['llm-security']}
+        apigeeProxyLinks={apigeeProxyLinks('llm-security', demos.project_id)}
+      />
     </div>
   )
 }

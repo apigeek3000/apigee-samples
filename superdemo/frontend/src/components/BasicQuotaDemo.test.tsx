@@ -48,6 +48,26 @@ describe('BasicQuotaDemo', () => {
     expect(within(limitSection).getByText('10')).toBeInTheDocument()
   })
 
+  it('clears the counter and response card when the tier is switched', async () => {
+    vi.mocked(sendBasicQuota).mockResolvedValueOnce({
+      raw: { used: 4, allowed: 10 },
+      quotaCount: 4,
+      quotaLimit: 10,
+    })
+    const user = userEvent.setup()
+
+    render(<BasicQuotaDemo />)
+    await user.click(screen.getByRole('button', { name: /Send Request/i }))
+
+    const counterSection = (await screen.findByText('Counter')).parentElement!
+    expect(within(counterSection).getByText('4')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /^Premium$/i }))
+
+    expect(screen.queryByText('Counter')).not.toBeInTheDocument()
+    expect(screen.queryByText('Limit')).not.toBeInTheDocument()
+  })
+
   it('surfaces "Quota exceeded" error in the response card', async () => {
     vi.mocked(sendBasicQuota).mockRejectedValueOnce({
       status: 429,

@@ -48,7 +48,9 @@ export function App() {
         <StatusBanner demos={demos} error={error} />
         {activeDemo === null && <EmptyState />}
         {activeDemo?.placeholder && <PlaceholderDemo demo={activeDemo} />}
-        {!activeDemo?.placeholder && activeDemo?.id === 'basic-quota' && <BasicQuotaDemo />}
+        {!activeDemo?.placeholder && activeDemo?.id === 'basic-quota' && (
+          <BasicQuotaDemo projectId={demos?.project_id} />
+        )}
         {!activeDemo?.placeholder && activeDemo?.id === 'llm-security' && demos && (
           <LlmSecurityDemo demos={demos} demo={activeDemo} />
         )}
@@ -56,13 +58,13 @@ export function App() {
           <LlmRateLimitingDemo demos={demos} demo={activeDemo} />
         )}
         {!activeDemo?.placeholder && activeDemo?.id === 'apigee-mcp' && (
-          <ApigeeMcpDemo demo={activeDemo} />
+          <ApigeeMcpDemo demo={activeDemo} projectId={demos?.project_id} />
         )}
         {!activeDemo?.placeholder && activeDemo?.id === 'cloud-logging' && demos && (
           <CloudLoggingDemo demos={demos} demo={activeDemo} />
         )}
         {!activeDemo?.placeholder && activeDemo?.id === 'threat-protection' && (
-          <ThreatProtectionDemo demo={activeDemo} />
+          <ThreatProtectionDemo demo={activeDemo} projectId={demos?.project_id} />
         )}
       </main>
     </div>

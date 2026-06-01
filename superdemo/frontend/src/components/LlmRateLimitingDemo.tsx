@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import type { DemoMetadata, DemosResponse } from '../types'
 import { MoreInfo } from './MoreInfo'
 import { RateLimitPane, type RateLimitPaneHandle } from './RateLimitPane'
-import { demoInfo } from '../demoInfo'
+import { apigeeProxyLinks, demoInfo } from '../demoInfo'
 import styles from './LlmRateLimitingDemo.module.css'
 
 const BURST_PROMPTS = [
@@ -144,7 +144,10 @@ export function LlmRateLimitingDemo({ demos, demo }: Props) {
         </div>
       </div>
 
-      <MoreInfo {...demoInfo['llm-token-limits-v2']} />
+      <MoreInfo
+        {...demoInfo['llm-token-limits-v2']}
+        apigeeProxyLinks={apigeeProxyLinks('llm-token-limits-v2', demos.project_id)}
+      />
     </div>
   )
 }

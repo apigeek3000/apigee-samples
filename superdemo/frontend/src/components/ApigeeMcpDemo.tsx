@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import type { DemoMetadata, McpTool, McpChatEvent } from '../types'
 import { MoreInfo } from './MoreInfo'
 import { fetchMcpTools, streamMcpChat } from '../api'
-import { demoInfo } from '../demoInfo'
+import { apigeeProxyLinks, demoInfo } from '../demoInfo'
 import styles from './ApigeeMcpDemo.module.css'
 
 interface Props {
   demo: DemoMetadata
+  projectId?: string | null
 }
 
 type DisplayMessage =
@@ -50,7 +51,7 @@ function nextMessageId(): string {
   return `m-${messageSeq}`
 }
 
-export function ApigeeMcpDemo({ demo }: Props) {
+export function ApigeeMcpDemo({ demo, projectId }: Props) {
   const [tools, setTools] = useState<McpTool[]>([])
   const [toolsError, setToolsError] = useState<string | null>(null)
   const [toolsLoading, setToolsLoading] = useState(true)
@@ -278,7 +279,10 @@ export function ApigeeMcpDemo({ demo }: Props) {
         </section>
       </div>
 
-      <MoreInfo {...demoInfo['apigee-mcp']} />
+      <MoreInfo
+        {...demoInfo['apigee-mcp']}
+        apigeeProxyLinks={apigeeProxyLinks('apigee-mcp', projectId)}
+      />
     </div>
   )
 }

@@ -3,10 +3,14 @@ import { sendBasicQuota } from '../api'
 import type { ApiError, QuotaResponse, QuotaTier } from '../types'
 import { MoreInfo } from './MoreInfo'
 import { ResponseCard } from './ResponseCard'
-import { demoInfo } from '../demoInfo'
+import { apigeeProxyLinks, demoInfo } from '../demoInfo'
 import styles from './BasicQuotaDemo.module.css'
 
-export function BasicQuotaDemo() {
+interface Props {
+  projectId?: string | null
+}
+
+export function BasicQuotaDemo({ projectId }: Props = {}) {
   const [tier, setTier] = useState<QuotaTier>('trial')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<QuotaResponse | null>(null)
@@ -49,7 +53,12 @@ export function BasicQuotaDemo() {
               key={t}
               type="button"
               aria-pressed={tier === t}
-              onClick={() => setTier(t)}
+              onClick={() => {
+                if (t === tier) return
+                setTier(t)
+                setResult(null)
+                setError(null)
+              }}
             >
               {t === 'trial' ? 'Trial' : 'Premium'}
             </button>
@@ -98,7 +107,10 @@ export function BasicQuotaDemo() {
         error={error}
       />
 
-      <MoreInfo {...demoInfo['basic-quota']} />
+      <MoreInfo
+        {...demoInfo['basic-quota']}
+        apigeeProxyLinks={apigeeProxyLinks('basic-quota', projectId)}
+      />
     </div>
   )
 }
