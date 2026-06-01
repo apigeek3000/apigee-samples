@@ -11,6 +11,15 @@ SPA renders one view per demo and talks only to the backend.
 For a presenter-facing walkthrough of each demo — what to click, what to
 say, what the audience should notice — see [GUIDE.md](GUIDE.md).
 
+## Wired-up demos
+
+- **Basic Quota** — Demonstrates Apigee Quota policies. Trial tier allows 10 requests/minute. Premium tier allows 1000 requests/hour.
+- **LLM Security v2** — Routes prompts through Google Cloud Model Armor for threat protection before forwarding to Vertex AI.
+- **LLM Rate Limiting** — Demonstrates Apigee's LLMTokenQuota AI policy. Bronze tier allows 2000 tokens per 5 minutes; silver allows 5000. Same prompt is sent to both tiers in parallel.
+- **MCP Server** — Apigee serves as an MCP server: dynamically discovers tools from Apigee API hub specs and exposes them to a streaming AI agent.
+- **Cloud Logging** — Apigee MessageLogging policy writes a structured entry to Google Cloud Logging on every request.
+- **Threat Protection** — Apigee RegularExpressionProtection blocks SQL keywords in query params; JSONThreatProtection rejects oversized JSON payloads.
+
 ## Prerequisites
 
 **Google Cloud:**
@@ -22,6 +31,8 @@ say, what the audience should notice — see [GUIDE.md](GUIDE.md).
 deploy script), `jq`, `curl`, `unzip`, `sed`, `bash`.
 
 **Used by the app:** Python 3.9+ with [`uv`](https://docs.astral.sh/uv/), Node.js 18+ with `npm`.
+
+**Cloud Logging demo permissions:** The Cloud Logging demo's inline "recent log entry" panel calls the Cloud Logging API from the FastAPI backend using Application Default Credentials. The identity backing those credentials (your local `gcloud auth application-default` user during dev, or the runtime service account when deployed) needs `roles/logging.viewer` on the project. Without it, the inline panel shows an error pointing to this requirement — the "Open in Logs Explorer" deep-link still works because it opens in the user's own browser session.
 
 Authenticate and set the active project (one-time):
 
@@ -39,7 +50,7 @@ gcloud auth application-default set-quota-project $GOOGLE_CLOUD_PROJECT
 ```bash
 cp ./superdemo/deploy/env.sh ./superdemo/deploy/secret.sh
 ```
-2. Edit [`superdemo/deploy/secret.sh`](deploy/secret.sh) — fill in with your values. Note that `REGION` points to a Vertex AI region used by the `llm-token-limits-v2` demo.
+2. Edit [`superdemo/deploy/secret.sh`](deploy/secret.sh) — fill in with your values
 3. Source it:
 ```bash
 source ./superdemo/deploy/secret.sh

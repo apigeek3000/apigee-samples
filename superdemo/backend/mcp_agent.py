@@ -27,6 +27,7 @@ The functions that touch ADK / MCP are kept thin so the bulk of the logic
 (event translation) can be unit-tested without a live MCP server.
 """
 
+import json
 import os
 from dataclasses import dataclass
 from typing import Any, Dict, Iterator, Tuple
@@ -38,11 +39,53 @@ ChatEvent = Dict[str, Any]
 
   {"type": "delta", "text": "..."}
   {"type": "tool_call", "id": "...", "name": "...", "args": {...}}
-  {"type": "tool_result", "id": "...", "status": <int>, "body": "..."}
+  {"type": "tool_result", "id": "...", "is_error": <bool>, "body": "..."}
   {"type": "done"}
   {"type": "error", "message": "..."}
   {"type": "session_restarted", "session_id": "..."}
 """
+
+
+def _tool_response_to_body(response: Any) -> Tuple[bool, str]:
+    """Reduce an ADK ``function_response.response`` payload to (is_error, body).
+
+    MCP tool results arrive as a dumped ``CallToolResult``::
+
+        {"content": [{"type": "text", "text": "..."}, ...],
+         "isError": <bool>,
+         "structuredContent": {...}?}
+
+    ADK wraps a tool-execution failure differently, as ``{"error": "..."}``.
+    The legacy/unknown shapes fall back to a JSON dump so the chat bubble shows
+    *something* meaningful rather than an empty body.
+    """
+    if not isinstance(response, dict):
+        return False, "" if response is None else str(response)
+
+    # ADK's run_async wrapper converts MCP transport failures into this shape.
+    if "error" in response and "content" not in response:
+        return True, str(response["error"])
+
+    is_error = bool(response.get("isError", False))
+
+    content = response.get("content")
+    if isinstance(content, list):
+        texts = [
+            part["text"]
+            for part in content
+            if isinstance(part, dict)
+            and part.get("type") == "text"
+            and isinstance(part.get("text"), str)
+        ]
+        if texts:
+            return is_error, "\n".join(texts)
+
+    structured = response.get("structuredContent")
+    if structured is not None:
+        return is_error, json.dumps(structured)
+
+    # Unknown shape — surface the raw payload rather than an empty bubble.
+    return is_error, json.dumps(response)
 
 
 # ── Pure translation: ADK Event → ChatEvent(s) ───────────────────────
@@ -79,13 +122,11 @@ def adk_event_to_chat_events(event: Any) -> Iterator[ChatEvent]:
 
         resp = getattr(part, "function_response", None)
         if resp is not None:
-            response = getattr(resp, "response", {}) or {}
-            status = response.get("status", 0) if isinstance(response, dict) else 0
-            body = response.get("body", "") if isinstance(response, dict) else str(response)
+            is_error, body = _tool_response_to_body(getattr(resp, "response", None))
             yield {
                 "type": "tool_result",
                 "id": getattr(resp, "id", ""),
-                "status": status,
+                "is_error": is_error,
                 "body": body,
             }
             continue

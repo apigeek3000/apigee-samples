@@ -111,6 +111,28 @@ echo "  Deleting service account $SA_EMAIL..."
 gcloud iam service-accounts delete "$SA_EMAIL" --project "$PROJECT" --quiet 2>/dev/null || true
 
 # ====================================================================
+# Clean cloud-logging
+# ====================================================================
+echo "============================================="
+echo " Cleaning Cloud Logging"
+echo "============================================="
+if [ -f "$rootdir/cloud-logging/clean-up-cloud-logging.sh" ]; then
+  cd "$rootdir/cloud-logging"
+  ./clean-up-cloud-logging.sh || true
+fi
+
+# ====================================================================
+# Clean threat-protection
+# ====================================================================
+echo "============================================="
+echo " Cleaning Threat Protection"
+echo "============================================="
+if [ -f "$rootdir/threat-protection/clean-up-threat-protection.sh" ]; then
+  cd "$rootdir/threat-protection"
+  ./clean-up-threat-protection.sh || true
+fi
+
+# ====================================================================
 # Delete Secret Manager secret
 # ====================================================================
 cd "$rootdir"

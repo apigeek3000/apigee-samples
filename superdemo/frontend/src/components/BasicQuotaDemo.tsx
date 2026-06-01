@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { sendBasicQuota } from '../api'
 import type { ApiError, QuotaResponse, QuotaTier } from '../types'
+import { MoreInfo } from './MoreInfo'
 import { ResponseCard } from './ResponseCard'
+import { demoInfo } from '../demoInfo'
 import styles from './BasicQuotaDemo.module.css'
 
 export function BasicQuotaDemo() {
@@ -95,6 +97,8 @@ export function BasicQuotaDemo() {
         payload={result?.raw}
         error={error}
       />
+
+      <MoreInfo {...demoInfo['basic-quota']} />
     </div>
   )
 }

@@ -47,6 +47,8 @@ echo "build_secret_payload: writes nested-shape superdemo-config JSON"
   export MCP_CLIENT_ID="mcp-key-001"
   export MCP_CLIENT_SECRET="mcp-secret-002"
   export MCP_STATUS="passing"
+  export CLOUD_LOGGING_STATUS="passing"
+  export THREAT_PROTECTION_STATUS="failing"
 
   tmpfile=$(mktemp /tmp/superdemo-payload.XXXXXX.json)
   build_secret_payload "$tmpfile"
@@ -86,6 +88,16 @@ echo "build_secret_payload: writes nested-shape superdemo-config JSON"
       "model": "gemini-fake",
       "region": "us-east1",
       "status": "passing"
+    },
+    "cloud-logging": {
+      "status": "passing",
+      "log_name": "projects/test-project/logs/apigee",
+      "proxy_name": "sample-cloud-logging"
+    },
+    "threat-protection": {
+      "status": "failing",
+      "max_json_object_keys": 5,
+      "blocked_keywords": ["delete","exec","drop table","insert","shutdown","update","or"]
     }
   }
 }
@@ -93,7 +105,7 @@ JSON
 )
 
   if [[ "$actual" == "$expected" ]]; then
-    echo "PASS:   demos.{basic-quota,llm-security,llm-token-limits-v2,apigee-mcp} populated"
+    echo "PASS:   demos.{basic-quota,llm-security,llm-token-limits-v2,apigee-mcp,cloud-logging,threat-protection} populated"
   else
     echo "FAIL:   payload mismatch — diff:"
     diff <(echo "$expected") <(echo "$actual") || true

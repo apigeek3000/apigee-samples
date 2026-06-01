@@ -12,9 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from datetime import datetime, timezone
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from google.cloud import logging_v2
 from google.cloud import secretmanager
+from google.api_core import exceptions as gax
 import google.auth
 import google.auth.exceptions
 import google.auth.transport.requests
@@ -53,6 +56,21 @@ _config_cache: dict | None = None
 # a browser, mirroring how the google-genai SDK does it from a notebook.
 _VERTEX_SCOPE = "https://www.googleapis.com/auth/cloud-platform"
 _credentials = None
+
+
+# ── Cloud Logging client (ADC) ────────────────────────────────────────
+# Lazy-init pattern matching _credentials. The frontend's CloudLoggingDemo
+# polls /api/cloud-logging/recent after each proxy request; we read the most
+# recent matching entry via list_entries.
+_logging_client: "logging_v2.Client | None" = None
+
+
+def _get_logging_client() -> "logging_v2.Client":
+    """Return a cached google-cloud-logging Client. Lazy-initialised via ADC."""
+    global _logging_client
+    if _logging_client is None:
+        _logging_client = logging_v2.Client()
+    return _logging_client
 
 
 def _get_bearer_token() -> str:
@@ -138,6 +156,25 @@ DEMO_METADATA = {
         ),
         "icon": "🔌",
     },
+    "cloud-logging": {
+        "id": "cloud-logging",
+        "title": "Cloud Logging",
+        "description": (
+            "Apigee MessageLogging policy writes a structured entry to "
+            "Google Cloud Logging on every request."
+        ),
+        "icon": "🪵",
+    },
+    "threat-protection": {
+        "id": "threat-protection",
+        "title": "Threat Protection",
+        "description": (
+            "Apigee RegularExpressionProtection blocks SQL keywords in "
+            "query params; JSONThreatProtection rejects oversized JSON "
+            "payloads."
+        ),
+        "icon": "🧱",
+    },
     "llm-semantic-cache-v2": {
         "id": "llm-semantic-cache-v2",
         "title": "LLM Semantic Cache",
@@ -221,6 +258,16 @@ def _demo_with_metadata(demo: dict, demo_config: dict) -> dict:
             value = demo_config.get(field)
             if value is not None:
                 enriched[field] = value
+    elif demo["id"] == "cloud-logging":
+        for field in ("log_name", "proxy_name"):
+            value = demo_config.get(field)
+            if value is not None:
+                enriched[field] = value
+    elif demo["id"] == "threat-protection":
+        for field in ("max_json_object_keys", "blocked_keywords"):
+            value = demo_config.get(field)
+            if value is not None:
+                enriched[field] = value
     return enriched
 
 
@@ -257,6 +304,80 @@ def reload_config():
     return {"status": "reloaded"}
 
 
+@app.get("/api/cloud-logging/recent")
+def cloud_logging_recent(after_ts: str | None = None) -> dict:
+    """
+    Return the most recent sample-cloud-logging entry, best-effort.
+
+    Frontend captures an ISO timestamp before sending the proxy request and
+    polls this endpoint until the matching entry is visible. Cloud Logging
+    has ~2-10s of eventual consistency, so callers should expect transient
+    empty responses.
+    """
+    config = get_config()  # raises HTTPException(500) if unconfigured
+    project_id = config.get("PROJECT_ID")
+    if not project_id:
+        raise HTTPException(
+            status_code=500,
+            detail="PROJECT_ID missing from superdemo config",
+        )
+
+    filter_parts = [
+        f'logName="projects/{project_id}/logs/apigee"',
+        'jsonPayload.proxy="sample-cloud-logging"',
+    ]
+    if after_ts:
+        filter_parts.append(f'timestamp >= "{after_ts}"')
+    filter_ = " AND ".join(filter_parts)
+
+    queried_at = datetime.now(timezone.utc).isoformat()
+
+    try:
+        log_client = _get_logging_client()
+        entries = log_client.list_entries(
+            filter_=filter_,
+            order_by=logging_v2.DESCENDING,
+            page_size=1,
+        )
+        entry = next(iter(entries), None)
+    except google.auth.exceptions.DefaultCredentialsError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "No Google Cloud credentials available for Cloud Logging. "
+                "Run `gcloud auth application-default login` for local dev, "
+                "or attach a service account when deployed."
+            ),
+        ) from e
+    except gax.PermissionDenied as e:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Backend identity needs roles/logging.viewer on the project "
+                "to fetch logs inline. The 'Open in Logs Explorer' button "
+                "still works."
+            ),
+        ) from e
+
+    if entry is None:
+        return {"entry": None, "queried_at": queried_at}
+
+    return {
+        "entry": {
+            "timestamp": entry.timestamp.isoformat(),
+            "jsonPayload": dict(entry.json_payload) if entry.json_payload else {},
+        },
+        "queried_at": queried_at,
+    }
+
+
+# Demos whose sibling Apigee proxy enforces VerifyAPIKey. The two unsecured
+# demos (cloud-logging, threat-protection) are deliberately absent — the
+# backend must not inject a key for them. apigee-mcp is not here because its
+# routes are owned by mcp_routes.py, not proxy_request.
+DEMOS_REQUIRING_KEY = {"basic-quota", "llm-security", "llm-token-limits-v2"}
+
+
 @app.api_route(
     "/api/proxy/{demo_name}/{path:path}",
     methods=["GET", "POST", "PUT", "DELETE"],
@@ -285,10 +406,16 @@ async def proxy_request(demo_name: str, path: str, request: Request):
         block = config.get("demos", {}).get("llm-token-limits-v2", {})
         api_key = block.get(f"{tier}_key")
         target_url = f"https://{host}/v2/samples/llm-token-limits/{path}"
+    elif demo_name == "cloud-logging":
+        api_key = None
+        target_url = f"https://{host}/v1/samples/cloud-logging"
+    elif demo_name == "threat-protection":
+        api_key = None
+        target_url = f"https://{host}/v1/samples/threat-protection/{path}"
     else:
         raise HTTPException(status_code=404, detail=f"Unknown demo: {demo_name}")
 
-    if not api_key:
+    if demo_name in DEMOS_REQUIRING_KEY and not api_key:
         raise HTTPException(
             status_code=500, detail=f"API key not found for {demo_name}"
         )
@@ -300,7 +427,8 @@ async def proxy_request(demo_name: str, path: str, request: Request):
         for k, v in request.headers.items()
         if k.lower() not in drop_headers
     }
-    out_headers["x-apikey"] = api_key
+    if demo_name in DEMOS_REQUIRING_KEY:
+        out_headers["x-apikey"] = api_key
 
     # llm-token-limits-v2's target XML has no <GoogleAccessToken>, so
     # Vertex expects the caller to supply the OAuth bearer token.

@@ -118,24 +118,32 @@ demo_labels=(
   "llm-security-v2"
   "llm-token-limits-v2"
   "apigee-mcp"
+  "cloud-logging"
+  "threat-protection"
 )
 demo_proxy_names=(
   "basic-quota"
   "llm-security-v2"
   "llm-token-limits-v2"
   "crm-mcp-proxy"
+  "sample-cloud-logging"
+  "threat-protection"
 )
 demo_deploy_dirs=(
   "$rootdir/basic-quota"
   "$rootdir/llm-security-v2"
   "$rootdir/llm-token-limits-v2"
   "$rootdir/apigee-mcp"
+  "$rootdir/cloud-logging"
+  "$rootdir/threat-protection"
 )
 demo_deploy_cmds=(
   "./deploy-basic-quota.sh"
   "./deploy-llm-security-v2.sh"
   "./deploy-llm-token-limits-v2.sh"
   "./deploy-all.sh"
+  "./deploy-cloud-logging.sh"
+  "./deploy-threat-protection.sh"
 )
 
 # Result accumulators, populated by the loop.
@@ -203,6 +211,12 @@ fetch_keys_for_demo() {
       MCP_ENDPOINT="https://${APIGEE_HOST}/crm-mcp-proxy/sse"
       demo_smoke_key="$MCP_CLIENT_ID"
       ;;
+    cloud-logging|threat-protection)
+      # These demos' sibling proxies are unsecured (no VerifyAPIKey), so no
+      # consumer key fetch is needed. Use a non-empty sentinel so the empty
+      # check downstream still treats this as "we have what we need".
+      demo_smoke_key="no-key-needed"
+      ;;
   esac
 }
 
@@ -268,6 +282,16 @@ run_smoke_test() {
       rm -f "$sse_file"
       echo "failed (no SSE data within 10s)"
       return
+      ;;
+    cloud-logging)
+      url="https://$APIGEE_HOST/v1/samples/cloud-logging"
+      code=$(smoke_test_proxy "$label" GET "$url")
+      curl_ok=$?
+      ;;
+    threat-protection)
+      url="https://$APIGEE_HOST/v1/samples/threat-protection/json?query=select"
+      code=$(smoke_test_proxy "$label" GET "$url")
+      curl_ok=$?
       ;;
     *)
       echo "test-error (unknown demo)"
@@ -352,6 +376,9 @@ LLM_SECURITY_STATUS=$(derive_demo_status "${demo_deploy_status[1]}" "${demo_test
 LLM_TOKEN_LIMITS_STATUS=$(derive_demo_status "${demo_deploy_status[2]}" "${demo_test_status[2]}")
 MCP_STATUS=$(derive_demo_status "${demo_deploy_status[3]}" "${demo_test_status[3]}")
 export BASIC_QUOTA_STATUS LLM_SECURITY_STATUS LLM_TOKEN_LIMITS_STATUS MCP_STATUS
+CLOUD_LOGGING_STATUS=$(derive_demo_status "${demo_deploy_status[4]}" "${demo_test_status[4]}")
+THREAT_PROTECTION_STATUS=$(derive_demo_status "${demo_deploy_status[5]}" "${demo_test_status[5]}")
+export CLOUD_LOGGING_STATUS THREAT_PROTECTION_STATUS
 
 if [[ -z "$BASIC_QUOTA_PREMIUM_KEY" || -z "$LLM_SECURITY_KEY" || -z "$LLM_TOKEN_LIMITS_BRONZE_KEY" || -z "$LLM_TOKEN_LIMITS_SILVER_KEY" || -z "$MCP_CLIENT_ID" ]]; then
   secret_status="skipped (no usable keys)"

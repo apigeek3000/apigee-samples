@@ -24,6 +24,14 @@ export interface DemoMetadata {
   region?: string
   /** Present only on the `apigee-mcp` demo. */
   mcp_endpoint?: string
+  /** Present only on the `cloud-logging` demo. */
+  log_name?: string
+  /** Present only on the `cloud-logging` demo. */
+  proxy_name?: string
+  /** Present only on the `threat-protection` demo. */
+  max_json_object_keys?: number
+  /** Present only on the `threat-protection` demo. */
+  blocked_keywords?: string[]
 }
 
 export interface DemosResponse {
@@ -81,6 +89,35 @@ export type McpChatEvent =
   | { type: 'session_restarted'; session_id: string }
   | { type: 'delta'; text: string }
   | { type: 'tool_call'; id: string; name: string; args: Record<string, unknown> }
-  | { type: 'tool_result'; id: string; status: number; body: string }
+  | { type: 'tool_result'; id: string; is_error: boolean; body: string }
   | { type: 'error'; message: string }
   | { type: 'done' }
+
+// ── Cloud Logging demo ───────────────────────────────────────────────
+
+export interface CloudLoggingResponse {
+  httpStatus: number
+  body: unknown
+  sentAt: string // ISO timestamp captured client-side before fetch
+}
+
+export interface CloudLogEntry {
+  timestamp: string
+  jsonPayload: Record<string, unknown>
+}
+
+export interface RecentLogResponse {
+  entry: CloudLogEntry | null
+  queried_at: string
+}
+
+// ── Threat Protection demo ───────────────────────────────────────────
+
+export type ThreatPolicy = 'regex' | 'json'
+
+export interface ThreatResponse {
+  httpStatus: number
+  body: unknown
+  blocked: boolean // derived: httpStatus !== 200
+  policy: ThreatPolicy
+}

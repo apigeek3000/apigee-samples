@@ -9,6 +9,10 @@ vi.mock('./api', () => ({
   sendBasicQuota: vi.fn(),
   sendLlmSecurity: vi.fn(),
   sendLlmRateLimiting: vi.fn(),
+  sendCloudLogging: vi.fn(),
+  fetchRecentLog: vi.fn(),
+  sendThreatRegex: vi.fn(),
+  sendThreatJson: vi.fn(),
 }))
 
 import { fetchDemos } from './api'
@@ -173,5 +177,61 @@ describe('App — placeholder demos', () => {
     await screen.findByText(/not yet implemented/i)
     // No real demo's "Send" button should be present.
     expect(screen.queryByRole('button', { name: /^Send$/i })).not.toBeInTheDocument()
+  })
+})
+
+describe('App — routes cloud-logging and threat-protection', () => {
+  it('renders CloudLoggingDemo when cloud-logging is the active demo', async () => {
+    vi.mocked(fetchDemos).mockResolvedValueOnce({
+      status: 'ready',
+      host: 'h',
+      project_id: 'fake-project',
+      demos: [
+        {
+          id: 'cloud-logging',
+          title: 'Cloud Logging',
+          description: 'd',
+          icon: '🪵',
+          status: 'passing',
+          log_name: 'projects/fake-project/logs/apigee',
+          proxy_name: 'sample-cloud-logging',
+        },
+      ],
+    })
+
+    render(<App />)
+
+    expect(
+      await screen.findByRole('heading', { level: 2, name: /Cloud Logging/i }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: /open in logs explorer/i }),
+    ).toBeInTheDocument()
+  })
+
+  it('renders ThreatProtectionDemo when threat-protection is the active demo', async () => {
+    vi.mocked(fetchDemos).mockResolvedValueOnce({
+      status: 'ready',
+      host: 'h',
+      project_id: 'p',
+      demos: [
+        {
+          id: 'threat-protection',
+          title: 'Threat Protection',
+          description: 'd',
+          icon: '🧱',
+          status: 'passing',
+          max_json_object_keys: 5,
+          blocked_keywords: ['delete'],
+        },
+      ],
+    })
+
+    render(<App />)
+
+    expect(
+      await screen.findByRole('heading', { level: 2, name: /Threat Protection/i }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^delete$/i })).toBeInTheDocument()
   })
 })

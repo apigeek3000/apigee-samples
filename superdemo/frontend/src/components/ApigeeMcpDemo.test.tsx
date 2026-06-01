@@ -99,7 +99,7 @@ describe('ApigeeMcpDemo (chat)', () => {
     mockChatStream([
       { type: 'delta', text: 'Looking that up…' },
       { type: 'tool_call', id: 't1', name: 'list_customers', args: {} },
-      { type: 'tool_result', id: 't1', status: 200, body: '{"customers":[]}' },
+      { type: 'tool_result', id: 't1', is_error: false, body: '{"customers":[]}' },
       { type: 'delta', text: 'No customers yet.' },
       { type: 'done' },
     ])
@@ -131,7 +131,10 @@ describe('ApigeeMcpDemo (chat)', () => {
     await waitFor(() => screen.getByText(/Apigee returned 401/))
   })
 
-  it('clears history and re-uses the same session_id on session_restarted', async () => {
+  it('keeps the first user message when session_restarted leads the stream', async () => {
+    // The backend always emits session_restarted on the very first message
+    // (it has no record of the client-generated session id yet). Regression
+    // test: that event must not wipe the message we just sent.
     sessionStorage.setItem('apigee-mcp-session', 'persistent-id')
     mockChatStream([
       { type: 'session_restarted', session_id: 'persistent-id' },
@@ -145,7 +148,41 @@ describe('ApigeeMcpDemo (chat)', () => {
     fireEvent.click(screen.getByRole('button', { name: /Send/i }))
 
     await waitFor(() => screen.getByText('Fresh agent.'))
+    expect(screen.getByText('hello')).toBeInTheDocument()
     expect(sessionStorage.getItem('apigee-mcp-session')).toBe('persistent-id')
+  })
+
+  it('drops stale history but keeps the current message on a later restart', async () => {
+    sessionStorage.setItem('apigee-mcp-session', 'persistent-id')
+    const stream = vi.spyOn(api, 'streamMcpChat')
+    // First turn: a normal exchange that builds up history.
+    stream.mockImplementationOnce(async (_session, _prompt, onEvent) => {
+      onEvent({ type: 'session_restarted', session_id: 'persistent-id' })
+      onEvent({ type: 'delta', text: 'First answer.' })
+      onEvent({ type: 'done' })
+    })
+    // Second turn: backend restarted, so it announces a restart again.
+    stream.mockImplementationOnce(async (_session, _prompt, onEvent) => {
+      onEvent({ type: 'session_restarted', session_id: 'persistent-id' })
+      onEvent({ type: 'delta', text: 'Second answer.' })
+      onEvent({ type: 'done' })
+    })
+
+    render(<ApigeeMcpDemo demo={MCP_DEMO} />)
+    const input = screen.getByPlaceholderText(/Ask the agent/i)
+
+    fireEvent.change(input, { target: { value: 'first' } })
+    fireEvent.click(screen.getByRole('button', { name: /Send/i }))
+    await waitFor(() => screen.getByText('First answer.'))
+
+    fireEvent.change(input, { target: { value: 'second' } })
+    fireEvent.click(screen.getByRole('button', { name: /Send/i }))
+    await waitFor(() => screen.getByText('Second answer.'))
+
+    // Stale history from the first turn is gone; the current message stays.
+    expect(screen.queryByText('first')).not.toBeInTheDocument()
+    expect(screen.queryByText('First answer.')).not.toBeInTheDocument()
+    expect(screen.getByText('second')).toBeInTheDocument()
   })
 })
 

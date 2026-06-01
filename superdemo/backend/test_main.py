@@ -16,7 +16,7 @@ import copy
 import gzip
 import json
 import os
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import google.auth.exceptions
 from fastapi.testclient import TestClient
@@ -102,7 +102,7 @@ def test_list_demos_unconfigured():
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "unconfigured"
-    assert len(data["demos"]) == 10
+    assert len(data["demos"]) == 12
 
 
 def test_list_demos_returns_metadata():
@@ -237,6 +237,8 @@ def test_list_demos_includes_status(fake_config):
         "llm-security": "passing",
         "llm-token-limits-v2": "passing",
         "apigee-mcp": "passing",
+        "cloud-logging": "unknown",
+        "threat-protection": "unknown",
     }
 
 
@@ -517,3 +519,211 @@ def test_list_demos_includes_apigee_mcp():
         assert "client_secret" not in mcp
     finally:
         main._config_cache = None
+
+
+def test_list_demos_includes_cloud_logging_and_threat_protection():
+    """Both new demos appear in /api/demos and are NOT marked placeholder."""
+    response = client.get("/api/demos")
+    data = response.json()
+    by_id = {d["id"]: d for d in data["demos"]}
+
+    assert "cloud-logging" in by_id
+    assert by_id["cloud-logging"].get("placeholder") is None
+    assert by_id["cloud-logging"]["title"] == "Cloud Logging"
+    assert by_id["cloud-logging"]["icon"] == "🪵"
+
+    assert "threat-protection" in by_id
+    assert by_id["threat-protection"].get("placeholder") is None
+    assert by_id["threat-protection"]["title"] == "Threat Protection"
+    assert by_id["threat-protection"]["icon"] == "🧱"
+
+
+def test_list_demos_cloud_logging_enrichment(fake_config):
+    """cloud-logging picks up log_name and proxy_name from the secret config."""
+    fake_config["demos"]["cloud-logging"] = {
+        "status": "passing",
+        "log_name": "projects/fake-project/logs/apigee",
+        "proxy_name": "sample-cloud-logging",
+    }
+    response = client.get("/api/demos")
+    data = response.json()
+    cl = next(d for d in data["demos"] if d["id"] == "cloud-logging")
+    assert cl["status"] == "passing"
+    assert cl["log_name"] == "projects/fake-project/logs/apigee"
+    assert cl["proxy_name"] == "sample-cloud-logging"
+
+
+def test_list_demos_threat_protection_enrichment(fake_config):
+    """threat-protection picks up max_json_object_keys and blocked_keywords."""
+    fake_config["demos"]["threat-protection"] = {
+        "status": "passing",
+        "max_json_object_keys": 5,
+        "blocked_keywords": ["delete", "exec", "drop table"],
+    }
+    response = client.get("/api/demos")
+    data = response.json()
+    tp = next(d for d in data["demos"] if d["id"] == "threat-protection")
+    assert tp["status"] == "passing"
+    assert tp["max_json_object_keys"] == 5
+    assert tp["blocked_keywords"] == ["delete", "exec", "drop table"]
+
+
+def test_proxy_cloud_logging_forwards_get_without_api_key(fake_config):
+    """GET /api/proxy/cloud-logging/ forwards to the cloud-logging proxy with no x-apikey."""
+    target_url = f"https://{FAKE_HOST}/v1/samples/cloud-logging"
+    upstream_body = {"args": {}, "headers": {"Host": "httpbin.org"}, "url": "https://httpbin.org/get"}
+    with respx.mock(assert_all_called=True) as mock:
+        route = mock.route(url__startswith=target_url).respond(200, json=upstream_body)
+        response = client.get("/api/proxy/cloud-logging/")
+
+    assert response.status_code == 200
+    assert response.json() == upstream_body
+    captured = route.calls.last.request
+    # No API key should be injected (neither header nor query param).
+    assert "x-apikey" not in {k.lower() for k in captured.headers}
+    assert "apikey" not in captured.url.params
+
+
+def test_proxy_threat_protection_regex_allowed(fake_config):
+    """GET /api/proxy/threat-protection/json?query=select forwards 200 from upstream."""
+    target_url = f"https://{FAKE_HOST}/v1/samples/threat-protection/json"
+    with respx.mock(assert_all_called=True) as mock:
+        route = mock.route(url__startswith=target_url).respond(
+            200, json={"args": {"query": "select"}}
+        )
+        response = client.get("/api/proxy/threat-protection/json?query=select")
+
+    assert response.status_code == 200
+    captured = route.calls.last.request
+    assert captured.url.params["query"] == "select"
+    assert "x-apikey" not in {k.lower() for k in captured.headers}
+
+
+def test_proxy_threat_protection_regex_blocked(fake_config):
+    """Upstream 500 (Apigee RegEx fault) is forwarded with body intact."""
+    target_url = f"https://{FAKE_HOST}/v1/samples/threat-protection/json"
+    fault_body = {"fault": {"faultstring": "Regular Expression Threat Detected", "detail": {"errorcode": "steps.regularexpressionprotection.ExecutionFailed"}}}
+    with respx.mock(assert_all_called=True) as mock:
+        mock.route(url__startswith=target_url).respond(500, json=fault_body)
+        response = client.get("/api/proxy/threat-protection/json?query=delete")
+
+    assert response.status_code == 500
+    assert response.json() == fault_body
+
+
+def test_proxy_threat_protection_json_allowed(fake_config):
+    """POST /api/proxy/threat-protection/echo with a 5-key body returns 200."""
+    target_url = f"https://{FAKE_HOST}/v1/samples/threat-protection/echo"
+    payload = {"f1": "t1", "f2": "t2", "f3": "t3", "f4": "t4", "f5": "t5"}
+    with respx.mock(assert_all_called=True) as mock:
+        route = mock.route(url__startswith=target_url).respond(200, json={"echo": payload})
+        response = client.post(
+            "/api/proxy/threat-protection/echo",
+            json=payload,
+        )
+
+    assert response.status_code == 200
+    captured = route.calls.last.request
+    assert json.loads(captured.content) == payload
+    assert "x-apikey" not in {k.lower() for k in captured.headers}
+
+
+def test_proxy_threat_protection_json_blocked(fake_config):
+    """Upstream 500 (JSON Threat Protection fault) is forwarded with body intact."""
+    target_url = f"https://{FAKE_HOST}/v1/samples/threat-protection/echo"
+    fault_body = {"fault": {"faultstring": "JSONThreatProtection[JSONTHREAT-Protection]: Execution failed"}}
+    with respx.mock(assert_all_called=True) as mock:
+        mock.route(url__startswith=target_url).respond(500, json=fault_body)
+        response = client.post(
+            "/api/proxy/threat-protection/echo",
+            json={"f1": "1", "f2": "2", "f3": "3", "f4": "4", "f5": "5", "f6": "6"},
+        )
+
+    assert response.status_code == 500
+    assert response.json() == fault_body
+
+
+# ---- /api/cloud-logging/recent ----
+
+class _FakeLogEntry:
+    def __init__(self, payload, ts="2026-05-29T12:00:00.000Z"):
+        self.json_payload = payload
+        self.timestamp = MagicMock()
+        # google.cloud.logging entry timestamps are datetime objects with isoformat;
+        # the endpoint must call .isoformat() on it.
+        self.timestamp.isoformat.return_value = ts
+
+
+def test_cloud_logging_recent_returns_entry(fake_config, monkeypatch):
+    """When the log API yields one entry, the endpoint returns it."""
+    fake_entry = _FakeLogEntry(
+        payload={
+            "organization": "fake-org",
+            "environment": "test1",
+            "proxy": "sample-cloud-logging",
+            "verb": "GET",
+            "response.code": "200",
+        },
+        ts="2026-05-29T12:00:00.000Z",
+    )
+
+    fake_client = MagicMock()
+    fake_client.list_entries.return_value = iter([fake_entry])
+    monkeypatch.setattr(main, "_get_logging_client", lambda: fake_client)
+
+    response = client.get(
+        "/api/cloud-logging/recent",
+        params={"after_ts": "2026-05-29T11:59:50.000Z"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["entry"]["jsonPayload"]["proxy"] == "sample-cloud-logging"
+    assert body["entry"]["timestamp"] == "2026-05-29T12:00:00.000Z"
+    assert "queried_at" in body
+
+    # Filter must include logName, proxy, and the after_ts clause.
+    args, kwargs = fake_client.list_entries.call_args
+    filter_ = kwargs.get("filter_") or (args[0] if args else "")
+    assert "logName=" in filter_
+    assert 'jsonPayload.proxy="sample-cloud-logging"' in filter_
+    assert "2026-05-29T11:59:50.000Z" in filter_
+
+
+def test_cloud_logging_recent_empty(fake_config, monkeypatch):
+    """No matching entry → entry is null."""
+    fake_client = MagicMock()
+    fake_client.list_entries.return_value = iter([])
+    monkeypatch.setattr(main, "_get_logging_client", lambda: fake_client)
+
+    response = client.get("/api/cloud-logging/recent")
+
+    assert response.status_code == 200
+    assert response.json()["entry"] is None
+
+
+def test_cloud_logging_recent_permission_denied(fake_config, monkeypatch):
+    """PermissionDenied surfaces as 403 with actionable guidance."""
+    from google.api_core import exceptions as gax
+
+    fake_client = MagicMock()
+    fake_client.list_entries.side_effect = gax.PermissionDenied("denied")
+    monkeypatch.setattr(main, "_get_logging_client", lambda: fake_client)
+
+    response = client.get("/api/cloud-logging/recent")
+
+    assert response.status_code == 403
+    detail = response.json()["detail"]
+    assert "roles/logging.viewer" in detail
+    assert "Open in Logs Explorer" in detail or "Logs Explorer" in detail
+
+
+def test_cloud_logging_recent_no_project(monkeypatch):
+    """No GCP project → 500 with the same guidance as get_config()."""
+    # Force get_config to raise the unconfigured 500.
+    main._config_cache = None
+    monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
+    response = client.get("/api/cloud-logging/recent")
+
+    assert response.status_code == 500
+    assert "GOOGLE_CLOUD_PROJECT" in response.json()["detail"]

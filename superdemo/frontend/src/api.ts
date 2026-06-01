@@ -1,5 +1,7 @@
 import type {
   ApiError,
+  CloudLoggingResponse,
+  CloudLogEntry,
   DemoMetadata,
   DemoStatus,
   DemosResponse,
@@ -9,6 +11,8 @@ import type {
   QuotaTier,
   RateLimitResponse,
   RateLimitTier,
+  RecentLogResponse,
+  ThreatResponse,
   VertexContent,
 } from './types'
 
@@ -47,6 +51,10 @@ function normalizeDemo(raw: unknown): DemoMetadata {
     model: d.model,
     region: d.region,
     mcp_endpoint: d.mcp_endpoint,
+    log_name: d.log_name,
+    proxy_name: d.proxy_name,
+    max_json_object_keys: d.max_json_object_keys,
+    blocked_keywords: d.blocked_keywords,
   }
 }
 
@@ -279,5 +287,84 @@ export async function streamMcpChat(
         }
       }
     }
+  }
+}
+
+// ── Cloud Logging demo ───────────────────────────────────────────────
+
+export async function sendCloudLogging(): Promise<CloudLoggingResponse> {
+  const sentAt = new Date().toISOString()
+  const response = await fetch(`${PROXY_PREFIX}/cloud-logging/`, {
+    method: 'GET',
+  })
+  const text = await response.text()
+  let body: unknown
+  try {
+    body = text ? JSON.parse(text) : null
+  } catch {
+    body = text
+  }
+  if (!response.ok) {
+    const err: ApiError = {
+      status: response.status,
+      message: `Cloud Logging proxy returned ${response.status}`,
+      body,
+    }
+    throw err
+  }
+  return { httpStatus: response.status, body, sentAt }
+}
+
+export async function fetchRecentLog(
+  afterIso: string,
+): Promise<RecentLogResponse> {
+  const url = `/api/cloud-logging/recent?after_ts=${encodeURIComponent(afterIso)}`
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw await parseError(response)
+  }
+  const data = (await response.json()) as { entry: CloudLogEntry | null; queried_at: string }
+  return data
+}
+
+// ── Threat Protection demo ───────────────────────────────────────────
+
+export async function sendThreatRegex(query: string): Promise<ThreatResponse> {
+  const url = `${PROXY_PREFIX}/threat-protection/json?query=${encodeURIComponent(query).replace(/%20/g, '+')}`
+  const response = await fetch(url, { method: 'GET' })
+  const text = await response.text()
+  let body: unknown
+  try {
+    body = text ? JSON.parse(text) : null
+  } catch {
+    body = text
+  }
+  // Do NOT throw on 500 — the 500 IS the demo (the proxy blocked the threat).
+  return {
+    httpStatus: response.status,
+    body,
+    blocked: response.status !== 200,
+    policy: 'regex',
+  }
+}
+
+export async function sendThreatJson(body: object): Promise<ThreatResponse> {
+  const response = await fetch(`${PROXY_PREFIX}/threat-protection/echo`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const text = await response.text()
+  let respBody: unknown
+  try {
+    respBody = text ? JSON.parse(text) : null
+  } catch {
+    respBody = text
+  }
+  return {
+    httpStatus: response.status,
+    body: respBody,
+    blocked: response.status !== 200,
+    policy: 'json',
   }
 }

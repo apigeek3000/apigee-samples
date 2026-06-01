@@ -455,7 +455,7 @@ describe('streamMcpChat', () => {
     const events: McpChatEvent[] = [
       { type: 'delta', text: 'A' },
       { type: 'tool_call', id: 't1', name: 'x', args: {} },
-      { type: 'tool_result', id: 't1', status: 200, body: 'ok' },
+      { type: 'tool_result', id: 't1', is_error: false, body: 'ok' },
       { type: 'done' },
     ]
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(makeStreamingResponse(events)))
@@ -476,5 +476,170 @@ describe('streamMcpChat', () => {
     await expect(
       streamMcpChat('sess-1', 'hi', () => undefined),
     ).rejects.toMatchObject({ status: 503 })
+  })
+})
+
+import {
+  fetchRecentLog,
+  sendCloudLogging,
+  sendThreatJson,
+  sendThreatRegex,
+} from './api'
+
+describe('sendCloudLogging', () => {
+  it('captures sentAt before fetching and returns httpStatus + body', async () => {
+    const fetch = mockFetch()
+    fetch.mockResolvedValueOnce(jsonResponse({ args: {}, url: 'https://httpbin.org/get' }))
+
+    const before = new Date().toISOString()
+    const result = await sendCloudLogging()
+    const after = new Date().toISOString()
+
+    expect(result.httpStatus).toBe(200)
+    expect(result.sentAt >= before && result.sentAt <= after).toBe(true)
+    expect(result.body).toMatchObject({ url: 'https://httpbin.org/get' })
+
+    // The request must go to the proxy with trailing slash.
+    expect(fetch).toHaveBeenCalledWith('/api/proxy/cloud-logging/', expect.any(Object))
+  })
+})
+
+describe('fetchRecentLog', () => {
+  it('passes after_ts as a query param and returns the entry', async () => {
+    const fetch = mockFetch()
+    const entry = {
+      timestamp: '2026-05-29T12:00:00.000Z',
+      jsonPayload: { proxy: 'sample-cloud-logging' },
+    }
+    fetch.mockResolvedValueOnce(jsonResponse({ entry, queried_at: '2026-05-29T12:00:01Z' }))
+
+    const result = await fetchRecentLog('2026-05-29T11:59:55.000Z')
+
+    expect(result.entry).toEqual(entry)
+    const url = fetch.mock.calls[0][0] as string
+    expect(url).toContain('/api/cloud-logging/recent')
+    expect(url).toContain('after_ts=2026-05-29T11')
+  })
+
+  it('returns entry: null when the backend reports no match', async () => {
+    const fetch = mockFetch()
+    fetch.mockResolvedValueOnce(
+      jsonResponse({ entry: null, queried_at: '2026-05-29T12:00:01Z' }),
+    )
+    const result = await fetchRecentLog('2026-05-29T11:59:55.000Z')
+    expect(result.entry).toBeNull()
+  })
+
+  it('throws an ApiError on 403 so the UI can show the permission hint', async () => {
+    const fetch = mockFetch()
+    fetch.mockResolvedValueOnce(
+      jsonResponse({ detail: 'roles/logging.viewer required' }, { status: 403 }),
+    )
+    await expect(fetchRecentLog('2026-05-29T11:59:55.000Z')).rejects.toMatchObject({
+      status: 403,
+    })
+  })
+})
+
+describe('sendThreatRegex', () => {
+  it('GETs /api/proxy/threat-protection/json with the query encoded', async () => {
+    const fetch = mockFetch()
+    fetch.mockResolvedValueOnce(jsonResponse({ args: { query: 'select' } }))
+
+    const result = await sendThreatRegex('select')
+
+    expect(result.blocked).toBe(false)
+    expect(result.policy).toBe('regex')
+    expect(result.httpStatus).toBe(200)
+    const url = fetch.mock.calls[0][0] as string
+    expect(url).toBe('/api/proxy/threat-protection/json?query=select')
+  })
+
+  it('encodes the query and returns blocked: true on HTTP 500', async () => {
+    const fetch = mockFetch()
+    fetch.mockResolvedValueOnce(
+      jsonResponse({ fault: { faultstring: 'Regex' } }, { status: 500 }),
+    )
+
+    const result = await sendThreatRegex('drop table')
+
+    expect(result.blocked).toBe(true)
+    expect(result.httpStatus).toBe(500)
+    const url = fetch.mock.calls[0][0] as string
+    expect(url).toBe('/api/proxy/threat-protection/json?query=drop+table')
+  })
+})
+
+describe('sendThreatJson', () => {
+  it('POSTs the body to /api/proxy/threat-protection/echo and returns blocked=false on 200', async () => {
+    const fetch = mockFetch()
+    const body = { f1: 't1', f2: 't2', f3: 't3', f4: 't4', f5: 't5' }
+    fetch.mockResolvedValueOnce(jsonResponse({ echo: body }))
+
+    const result = await sendThreatJson(body)
+
+    expect(result.blocked).toBe(false)
+    expect(result.policy).toBe('json')
+    expect(result.httpStatus).toBe(200)
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/proxy/threat-protection/echo',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
+      }),
+    )
+  })
+
+  it('returns blocked=true on 500', async () => {
+    const fetch = mockFetch()
+    fetch.mockResolvedValueOnce(
+      jsonResponse({ fault: { faultstring: 'JSON' } }, { status: 500 }),
+    )
+
+    const result = await sendThreatJson({ f1: '1', f2: '2', f3: '3', f4: '4', f5: '5', f6: '6' })
+
+    expect(result.blocked).toBe(true)
+    expect(result.httpStatus).toBe(500)
+  })
+})
+
+describe('fetchDemos — new metadata fields', () => {
+  it('passes through log_name, proxy_name, max_json_object_keys, blocked_keywords', async () => {
+    const fetch = mockFetch()
+    fetch.mockResolvedValueOnce(
+      jsonResponse({
+        status: 'ready',
+        host: 'apigee.test',
+        project_id: 'p',
+        demos: [
+          {
+            id: 'cloud-logging',
+            title: 'Cloud Logging',
+            description: 'd',
+            icon: '🪵',
+            status: 'passing',
+            log_name: 'projects/p/logs/apigee',
+            proxy_name: 'sample-cloud-logging',
+          },
+          {
+            id: 'threat-protection',
+            title: 'Threat Protection',
+            description: 'd',
+            icon: '🧱',
+            status: 'passing',
+            max_json_object_keys: 5,
+            blocked_keywords: ['delete', 'exec'],
+          },
+        ],
+      }),
+    )
+
+    const data = await fetchDemos()
+    const cl = data.demos.find((d) => d.id === 'cloud-logging')!
+    const tp = data.demos.find((d) => d.id === 'threat-protection')!
+    expect(cl.log_name).toBe('projects/p/logs/apigee')
+    expect(cl.proxy_name).toBe('sample-cloud-logging')
+    expect(tp.max_json_object_keys).toBe(5)
+    expect(tp.blocked_keywords).toEqual(['delete', 'exec'])
   })
 })

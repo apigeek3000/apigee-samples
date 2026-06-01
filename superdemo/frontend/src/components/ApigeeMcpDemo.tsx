@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { DemoMetadata, McpTool, McpChatEvent } from '../types'
+import { MoreInfo } from './MoreInfo'
 import { fetchMcpTools, streamMcpChat } from '../api'
+import { demoInfo } from '../demoInfo'
 import styles from './ApigeeMcpDemo.module.css'
 
 interface Props {
@@ -20,7 +22,7 @@ type DisplayMessage =
   | {
       kind: 'tool_result'
       callId: string
-      status: number
+      isError: boolean
       body: string
       id: string
     }
@@ -91,9 +93,16 @@ export function ApigeeMcpDemo({ demo }: Props) {
   function applyChatEvent(event: McpChatEvent) {
     switch (event.type) {
       case 'session_restarted':
-        // Backend lost our session — clear local history but keep the id so
-        // subsequent requests reuse it.
-        setMessages([])
+        // The backend has no record of this session — either this is the first
+        // message, or the backend restarted and lost its in-memory state. Drop
+        // any stale history from the previous (now-gone) session, but KEEP the
+        // message we're currently sending: it belongs to the fresh session and
+        // a response is about to stream against it. Clearing unconditionally
+        // here would wipe the user's very first message.
+        setMessages((prev) => {
+          const last = prev[prev.length - 1]
+          return last && last.kind === 'user' ? [last] : []
+        })
         break
       case 'delta':
         setMessages((prev) => {
@@ -118,7 +127,7 @@ export function ApigeeMcpDemo({ demo }: Props) {
         appendMessage({
           kind: 'tool_result',
           callId: event.id,
-          status: event.status,
+          isError: event.is_error,
           body: event.body,
           id: nextMessageId(),
         })
@@ -215,8 +224,13 @@ export function ApigeeMcpDemo({ demo }: Props) {
               }
               if (msg.kind === 'tool_result') {
                 return (
-                  <div key={msg.id} className={styles.bubbleTool}>
-                    ← {msg.status} · {msg.body}
+                  <div
+                    key={msg.id}
+                    className={`${styles.bubbleTool} ${
+                      msg.isError ? styles.bubbleToolError : ''
+                    }`}
+                  >
+                    ← {msg.body}
                   </div>
                 )
               }
@@ -263,6 +277,8 @@ export function ApigeeMcpDemo({ demo }: Props) {
           </div>
         </section>
       </div>
+
+      <MoreInfo {...demoInfo['apigee-mcp']} />
     </div>
   )
 }

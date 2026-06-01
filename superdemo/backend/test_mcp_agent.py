@@ -71,11 +71,15 @@ def test_function_call_becomes_tool_call_event():
     }]
 
 
-def test_function_response_becomes_tool_result_event():
+def test_function_response_extracts_body_from_mcp_content():
+    # MCP tool results arrive as a dumped CallToolResult, not {status, body}.
     event = _FakeEvent([
         _FakePart(function_response=_FakeFunctionResponse(
             name="list_customers",
-            response={"status": 200, "body": '{"customers":[]}'},
+            response={
+                "content": [{"type": "text", "text": '{"customers":[]}'}],
+                "isError": False,
+            },
             id="call-1",
         ))
     ])
@@ -83,23 +87,86 @@ def test_function_response_becomes_tool_result_event():
     assert result == [{
         "type": "tool_result",
         "id": "call-1",
-        "status": 200,
+        "is_error": False,
         "body": '{"customers":[]}',
     }]
 
 
-def test_function_response_without_status_defaults_to_zero():
+def test_function_response_joins_multiple_text_blocks():
     event = _FakeEvent([
         _FakePart(function_response=_FakeFunctionResponse(
-            name="x", response={"body": "raw"}, id="x-1"
+            name="x",
+            response={
+                "content": [
+                    {"type": "text", "text": "line one"},
+                    {"type": "text", "text": "line two"},
+                ],
+                "isError": False,
+            },
+            id="x-1",
         ))
     ])
     result = list(adk_event_to_chat_events(event))
     assert result == [{
         "type": "tool_result",
         "id": "x-1",
-        "status": 0,
-        "body": "raw",
+        "is_error": False,
+        "body": "line one\nline two",
+    }]
+
+
+def test_function_response_marks_mcp_error():
+    event = _FakeEvent([
+        _FakePart(function_response=_FakeFunctionResponse(
+            name="x",
+            response={
+                "content": [{"type": "text", "text": "customer not found"}],
+                "isError": True,
+            },
+            id="x-1",
+        ))
+    ])
+    result = list(adk_event_to_chat_events(event))
+    assert result == [{
+        "type": "tool_result",
+        "id": "x-1",
+        "is_error": True,
+        "body": "customer not found",
+    }]
+
+
+def test_function_response_handles_adk_error_wrapper():
+    # ADK's run_async wraps transport failures as {"error": "..."}.
+    event = _FakeEvent([
+        _FakePart(function_response=_FakeFunctionResponse(
+            name="x",
+            response={"error": "MCP tool execution failed: boom"},
+            id="x-1",
+        ))
+    ])
+    result = list(adk_event_to_chat_events(event))
+    assert result == [{
+        "type": "tool_result",
+        "id": "x-1",
+        "is_error": True,
+        "body": "MCP tool execution failed: boom",
+    }]
+
+
+def test_function_response_falls_back_to_structured_content():
+    event = _FakeEvent([
+        _FakePart(function_response=_FakeFunctionResponse(
+            name="x",
+            response={"content": [], "structuredContent": {"count": 3}},
+            id="x-1",
+        ))
+    ])
+    result = list(adk_event_to_chat_events(event))
+    assert result == [{
+        "type": "tool_result",
+        "id": "x-1",
+        "is_error": False,
+        "body": '{"count": 3}',
     }]
 
 

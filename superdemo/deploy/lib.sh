@@ -130,6 +130,8 @@ derive_demo_status() {
 # deploy time to keep edits inside superdemo/ per the project's scope rule.)
 build_secret_payload() {
   local out_file="$1"
+  # tp_max_keys mirrors threat-protection/apiproxy/policies/JSONTHREAT-Protection.xml's
+  # <ObjectEntryCount>5</ObjectEntryCount>. If that XML changes, update this too.
   jq -n \
     --arg apigee_host       "$APIGEE_HOST" \
     --arg project_id        "$PROJECT_ID" \
@@ -151,6 +153,11 @@ build_secret_payload() {
     --arg mcp_model         "$MODEL_NAME" \
     --arg mcp_region        "$REGION" \
     --arg mcp_status        "$MCP_STATUS" \
+    --arg cl_status         "$CLOUD_LOGGING_STATUS" \
+    --arg cl_proxy_name     "sample-cloud-logging" \
+    --arg tp_status         "$THREAT_PROTECTION_STATUS" \
+    --argjson tp_max_keys   5 \
+    --argjson tp_blocked    '["delete","exec","drop table","insert","shutdown","update","or"]' \
     --argjson ltl_bronze    2000 \
     --argjson ltl_silver    5000 \
     --argjson ltl_interval  5 \
@@ -186,6 +193,16 @@ build_secret_payload() {
           model:         $mcp_model,
           region:        $mcp_region,
           status:        $mcp_status
+        },
+        "cloud-logging": {
+          status:     $cl_status,
+          log_name:   ("projects/" + $project_id + "/logs/apigee"),
+          proxy_name: $cl_proxy_name
+        },
+        "threat-protection": {
+          status:                $tp_status,
+          max_json_object_keys:  $tp_max_keys,
+          blocked_keywords:      $tp_blocked
         }
       }
     }' > "$out_file"

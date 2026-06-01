@@ -8,6 +8,8 @@ import { LlmSecurityDemo } from './components/LlmSecurityDemo'
 import { LlmRateLimitingDemo } from './components/LlmRateLimitingDemo'
 import { PlaceholderDemo } from './components/PlaceholderDemo'
 import { ApigeeMcpDemo } from './components/ApigeeMcpDemo'
+import { CloudLoggingDemo } from './components/CloudLoggingDemo'
+import { ThreatProtectionDemo } from './components/ThreatProtectionDemo'
 import { EmptyState } from './components/EmptyState'
 import { useShowStatus } from './hooks/useShowStatus'
 
@@ -55,6 +57,12 @@ export function App() {
         )}
         {!activeDemo?.placeholder && activeDemo?.id === 'apigee-mcp' && (
           <ApigeeMcpDemo demo={activeDemo} />
+        )}
+        {!activeDemo?.placeholder && activeDemo?.id === 'cloud-logging' && demos && (
+          <CloudLoggingDemo demos={demos} demo={activeDemo} />
+        )}
+        {!activeDemo?.placeholder && activeDemo?.id === 'threat-protection' && (
+          <ThreatProtectionDemo demo={activeDemo} />
         )}
       </main>
     </div>
