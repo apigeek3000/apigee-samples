@@ -147,3 +147,13 @@ same id.
   (key: `apigee-mcp-session`) and reloading.
 - **Per-demo status dots** are set by `deploy-superdemo.sh` — re-run it to
   refresh all four.
+
+## Demo status indicators
+
+The sidebar shows a colored dot next to each demo: green for passing, amber
+for failing, red for undeployed, gray for unknown, and purple for demos that
+are not yet implemented (placeholders shown for planned demos). The toggle at the bottom
+of the sidebar hides the dots — useful during live customer demos when you'd
+rather not advertise that something is currently broken. The setting persists
+in localStorage. Status is set by `deploy-superdemo.sh` at the end of each
+run, so re-running it refreshes every demo's status.
