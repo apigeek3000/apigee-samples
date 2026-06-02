@@ -101,6 +101,32 @@ describe('CloudLoggingDemo', () => {
     })
   })
 
+  it('keeps polling past the old 8s budget to absorb ingestion latency', async () => {
+    vi.mocked(sendCloudLogging).mockResolvedValueOnce({
+      httpStatus: 200,
+      body: {},
+      sentAt: '2026-05-29T12:00:00.000Z',
+    })
+    vi.mocked(fetchRecentLog).mockResolvedValue({
+      entry: null,
+      queried_at: '2026-05-29T12:00:01Z',
+    })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+
+    render(<CloudLoggingDemo demos={demos} demo={demo} />)
+    await user.click(screen.getByRole('button', { name: /send request/i }))
+
+    // Advance ~15s — well past the old 8-attempt (8s) window.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15000)
+    })
+
+    // Still polling: must not have given up yet, and must have polled
+    // many more than the old 8 times.
+    expect(screen.queryByText(/log not yet visible/i)).not.toBeInTheDocument()
+    expect(vi.mocked(fetchRecentLog).mock.calls.length).toBeGreaterThan(8)
+  })
+
   it('shows the permission-error message when fetchRecentLog throws 403', async () => {
     vi.mocked(sendCloudLogging).mockResolvedValueOnce({
       httpStatus: 200,

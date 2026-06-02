@@ -53,6 +53,14 @@ export const demoInfo: Record<string, DemoInfo> = {
         href: `${APIGEE_POLICY_BASE}/verify-api-key-policy`,
       },
       { label: 'Quota', href: `${APIGEE_POLICY_BASE}/quota-policy` },
+      {
+        label: 'AssignMessage',
+        href: `${APIGEE_POLICY_BASE}/assign-message-policy`,
+      },
+      {
+        label: 'RaiseFault',
+        href: `${APIGEE_POLICY_BASE}/raise-fault-policy`,
+      },
     ],
     githubHref: `${GITHUB_BASE}/basic-quota`,
   },
@@ -60,23 +68,55 @@ export const demoInfo: Record<string, DemoInfo> = {
     diagram: `flowchart LR
   Browser([Browser])
   subgraph Apigee["Apigee Proxy"]
-    MA[Model Armor]
+    SP[Sanitize policies]
   end
+  MA[Model Armor]
   Vertex[(Vertex AI)]
   Browser -- prompt --> Apigee
+  Apigee -- inspect --> MA
+  MA -- verdict --> Apigee
   Apigee -- safe --> Vertex
   Apigee -. blocked .-> Browser
   Vertex --> Apigee --> Browser`,
     description:
-      'Every prompt is inspected by Model Armor before reaching Vertex AI; responses are inspected on the way back. Apigee enforces a uniform safety policy in front of the LLM backend without the client or the model needing to know.',
+      'Apigee calls out to Model Armor — a separate Google Cloud service, not a component inside the proxy — to inspect every prompt before it reaches Vertex AI, and again to inspect responses on the way back. Apigee enforces a uniform safety policy in front of the LLM backend without the client or the model needing to know.',
     policyLinks: [
       {
         label: 'VerifyAPIKey',
         href: `${APIGEE_POLICY_BASE}/verify-api-key-policy`,
       },
+      { label: 'CORS', href: `${APIGEE_POLICY_BASE}/cors-policy` },
       {
-        label: 'ServiceCallout',
-        href: `${APIGEE_POLICY_BASE}/service-callout-policy`,
+        label: 'OASValidation',
+        href: `${APIGEE_POLICY_BASE}/oas-validation-policy`,
+      },
+      {
+        label: 'ExtractVariables',
+        href: `${APIGEE_POLICY_BASE}/extract-variables-policy`,
+      },
+      {
+        label: 'AssignMessage',
+        href: `${APIGEE_POLICY_BASE}/assign-message-policy`,
+      },
+      {
+        label: 'FlowCallout',
+        href: `${APIGEE_POLICY_BASE}/flow-callout-policy`,
+      },
+      {
+        label: 'SanitizeUserPrompt',
+        href: `${APIGEE_POLICY_BASE}/sanitize-user-prompt-policy`,
+      },
+      {
+        label: 'SanitizeModelResponse',
+        href: `${APIGEE_POLICY_BASE}/sanitize-llm-response-policy`,
+      },
+      {
+        label: 'KeyValueMapOperations',
+        href: `${APIGEE_POLICY_BASE}/key-value-map-operations-policy`,
+      },
+      {
+        label: 'RaiseFault',
+        href: `${APIGEE_POLICY_BASE}/raise-fault-policy`,
       },
     ],
     githubHref: `${GITHUB_BASE}/llm-security-v2`,
@@ -99,7 +139,22 @@ export const demoInfo: Record<string, DemoInfo> = {
         label: 'VerifyAPIKey',
         href: `${APIGEE_POLICY_BASE}/verify-api-key-policy`,
       },
-      { label: 'Quota', href: `${APIGEE_POLICY_BASE}/quota-policy` },
+      {
+        label: 'LLMTokenQuota',
+        href: `${APIGEE_POLICY_BASE}/llm-token-quota-policy`,
+      },
+      {
+        label: 'ExtractVariables',
+        href: `${APIGEE_POLICY_BASE}/extract-variables-policy`,
+      },
+      {
+        label: 'AssignMessage',
+        href: `${APIGEE_POLICY_BASE}/assign-message-policy`,
+      },
+      {
+        label: 'DataCapture',
+        href: `${APIGEE_POLICY_BASE}/data-capture-policy`,
+      },
     ],
     githubHref: `${GITHUB_BASE}/llm-token-limits-v2`,
   },
@@ -119,6 +174,10 @@ export const demoInfo: Record<string, DemoInfo> = {
       {
         label: 'MessageLogging',
         href: `${APIGEE_POLICY_BASE}/message-logging-policy`,
+      },
+      {
+        label: 'AssignMessage',
+        href: `${APIGEE_POLICY_BASE}/assign-message-policy`,
       },
     ],
     githubHref: `${GITHUB_BASE}/cloud-logging`,
@@ -173,6 +232,24 @@ export const demoInfo: Record<string, DemoInfo> = {
         label: 'VerifyAPIKey',
         href: `${APIGEE_POLICY_BASE}/verify-api-key-policy`,
       },
+      { label: 'OAuthV2', href: `${APIGEE_POLICY_BASE}/oauthv2-policy` },
+      {
+        label: 'AccessEntity',
+        href: `${APIGEE_POLICY_BASE}/access-entity-policy`,
+      },
+      {
+        label: 'ExtractVariables',
+        href: `${APIGEE_POLICY_BASE}/extract-variables-policy`,
+      },
+      {
+        label: 'AssignMessage',
+        href: `${APIGEE_POLICY_BASE}/assign-message-policy`,
+      },
+      {
+        label: 'RaiseFault',
+        href: `${APIGEE_POLICY_BASE}/raise-fault-policy`,
+      },
+      { label: 'XMLToJSON', href: `${APIGEE_POLICY_BASE}/xml-json-policy` },
     ],
     githubHref: `${GITHUB_BASE}/apigee-mcp`,
   },

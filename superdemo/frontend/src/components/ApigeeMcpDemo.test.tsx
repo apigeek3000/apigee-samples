@@ -194,16 +194,15 @@ describe('ApigeeMcpDemo (canned prompts)', () => {
 
   it('clicking a canned prompt populates the input', () => {
     render(<ApigeeMcpDemo demo={MCP_DEMO} />)
-    const chip = screen.getByRole('button', { name: /List recent customers/i })
+    const chip = screen.getByRole('button', { name: /Get details for customer 1234/i })
     fireEvent.click(chip)
     const input = screen.getByPlaceholderText(/Ask the agent/i) as HTMLInputElement
-    expect(input.value).toBe('List recent customers')
+    expect(input.value).toBe('Get details for customer 1234')
   })
 
-  it('renders all three canned prompts', () => {
+  it('renders both canned prompts', () => {
     render(<ApigeeMcpDemo demo={MCP_DEMO} />)
-    expect(screen.getByRole('button', { name: /List recent customers/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Tell me about customer 1/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Get details for customer 1234/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Create a customer named Acme/i })).toBeInTheDocument()
   })
 })

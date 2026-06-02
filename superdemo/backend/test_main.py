@@ -16,6 +16,8 @@ import copy
 import gzip
 import json
 import os
+import re
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import google.auth.exceptions
@@ -646,8 +648,15 @@ def test_proxy_threat_protection_json_blocked(fake_config):
 # ---- /api/cloud-logging/recent ----
 
 class _FakeLogEntry:
+    """Mirrors google.cloud.logging_v2.entries.StructEntry.
+
+    A real StructEntry exposes its structured body as ``.payload`` (a dict).
+    There is NO ``.json_payload`` or ``.payload_json`` attribute — the latter
+    exists only on ProtobufEntry.
+    """
+
     def __init__(self, payload, ts="2026-05-29T12:00:00.000Z"):
-        self.json_payload = payload
+        self.payload = payload
         self.timestamp = MagicMock()
         # google.cloud.logging entry timestamps are datetime objects with isoformat;
         # the endpoint must call .isoformat() on it.
@@ -682,12 +691,68 @@ def test_cloud_logging_recent_returns_entry(fake_config, monkeypatch):
     assert body["entry"]["timestamp"] == "2026-05-29T12:00:00.000Z"
     assert "queried_at" in body
 
-    # Filter must include logName, proxy, and the after_ts clause.
+    # Filter must include logName, proxy, and a timestamp lower bound.
     args, kwargs = fake_client.list_entries.call_args
     filter_ = kwargs.get("filter_") or (args[0] if args else "")
     assert "logName=" in filter_
     assert 'jsonPayload.proxy="sample-cloud-logging"' in filter_
-    assert "2026-05-29T11:59:50.000Z" in filter_
+    assert "timestamp >=" in filter_
+
+
+def _floor_from_filter(filter_: str) -> datetime:
+    """Extract the `timestamp >= "..."` lower bound from a Logging filter."""
+    match = re.search(r'timestamp >= "([^"]+)"', filter_)
+    assert match, f"no timestamp lower bound in filter: {filter_}"
+    return datetime.fromisoformat(match.group(1))
+
+
+def test_cloud_logging_recent_scopes_to_configured_project(fake_config, monkeypatch):
+    """The query must be scoped to the configured PROJECT_ID, not the ADC default.
+
+    list_entries defaults its resource scope to the client's project; if that
+    differs from the Apigee project the inline poll silently returns nothing
+    while the deep link (explicit project) still works.
+    """
+    fake_client = MagicMock()
+    fake_client.list_entries.return_value = iter([])
+    monkeypatch.setattr(main, "_get_logging_client", lambda: fake_client)
+
+    response = client.get("/api/cloud-logging/recent")
+
+    assert response.status_code == 200
+    _, kwargs = fake_client.list_entries.call_args
+    assert kwargs.get("resource_names") == ["projects/fake-project"]
+
+
+def test_cloud_logging_recent_floor_is_skew_safe(fake_config, monkeypatch):
+    """A client clock running ahead must not exclude a server-stamped entry.
+
+    after_ts comes from the browser's wall clock. If it is ahead of real time,
+    a naive `timestamp >= after_ts` filter would exclude the (server-stamped)
+    entry forever. The backend must clamp the floor to its own clock minus a
+    freshness window.
+    """
+    fake_client = MagicMock()
+    fake_client.list_entries.return_value = iter([])
+    monkeypatch.setattr(main, "_get_logging_client", lambda: fake_client)
+
+    before = datetime.now(timezone.utc)
+    # Simulate a browser clock running ~1 year ahead of real time.
+    response = client.get(
+        "/api/cloud-logging/recent",
+        params={"after_ts": "2099-01-01T00:00:00.000Z"},
+    )
+    after = datetime.now(timezone.utc)
+
+    assert response.status_code == 200
+    _, kwargs = fake_client.list_entries.call_args
+    floor = _floor_from_filter(kwargs["filter_"])
+    # Floor must be at/below server time (minus the window), never the future
+    # client timestamp — otherwise skew permanently hides the entry.
+    assert floor <= after
+    assert floor < datetime(2099, 1, 1, tzinfo=timezone.utc)
+    # And it should be recent (within the freshness window), not ancient.
+    assert floor >= before - main.LOG_FRESHNESS_WINDOW - (after - before)
 
 
 def test_cloud_logging_recent_empty(fake_config, monkeypatch):

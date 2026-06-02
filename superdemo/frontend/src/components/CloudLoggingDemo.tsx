@@ -16,7 +16,10 @@ interface Props {
   demo: DemoMetadata
 }
 
-const POLL_ATTEMPTS = 8
+// Cloud Logging is eventually consistent: a freshly written entry can take
+// tens of seconds to become queryable via the API. Poll long enough to absorb
+// that latency rather than giving up after a few seconds.
+const POLL_ATTEMPTS = 25
 const POLL_INTERVAL_MS = 1000
 
 export function CloudLoggingDemo({ demos, demo }: Props) {

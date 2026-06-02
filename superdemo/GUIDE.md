@@ -121,16 +121,13 @@ tools, and the UI streams the deltas, tool calls, and tool results live.
 1. Select **MCP Server** in the sidebar. The left rail (**Discovered
    Tools**) lists every tool the agent has pulled from API hub — point out
    that nothing is hard-coded; publish a new spec and it appears here.
-2. Click the canned prompt **List recent customers**. The chat shows the
+2. Click the canned prompts. The chat shows the
    user message, a `→ tool(...)` bubble for the outbound call Apigee
    brokers, a `← 200 · {...}` bubble for the response, and then the
    assistant streams a natural-language summary token by token.
-3. Click **Tell me about customer 1**. Same flow — the audience sees the
+3. Click a different prompt — the audience sees the
    agent pick a different tool from the same discovered list.
-4. Click **Create a customer named Acme Corp**. Watch the agent call the
-   create endpoint; the tool result bubble shows the new resource Apigee
-   returned.
-5. (Optional) Type a freeform prompt to show the agent reasoning over
+4. (Optional) Type a freeform prompt to show the agent reasoning over
    which tools to call.
 
 **Talking points:** tool discovery, session continuity, and streaming are

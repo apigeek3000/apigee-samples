@@ -30,8 +30,7 @@ type DisplayMessage =
   | { kind: 'error'; text: string; id: string }
 
 const CANNED_PROMPTS = [
-  'List recent customers',
-  'Tell me about customer 1',
+  'Get details for customer 1234',
   'Create a customer named Acme Corp',
 ]
 

@@ -78,6 +78,7 @@
   background: var(--surface, #1a1a1a);
   border-radius: 8px;
   padding: 12px;
+  flex: 1;
   min-height: 0;
 }
 

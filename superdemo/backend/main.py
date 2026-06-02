@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from google.cloud import logging_v2
@@ -63,6 +63,12 @@ _credentials = None
 # polls /api/cloud-logging/recent after each proxy request; we read the most
 # recent matching entry via list_entries.
 _logging_client: "logging_v2.Client | None" = None
+
+# How far back the inline poll searches. Cloud Logging is eventually consistent
+# (entries take seconds-to-tens-of-seconds to become queryable via the API), so
+# the lower bound is computed from the backend's own clock — never the browser's,
+# which can run ahead and permanently exclude the (server-stamped) entry.
+LOG_FRESHNESS_WINDOW = timedelta(seconds=120)
 
 
 def _get_logging_client() -> "logging_v2.Client":
@@ -322,19 +328,35 @@ def cloud_logging_recent(after_ts: str | None = None) -> dict:
             detail="PROJECT_ID missing from superdemo config",
         )
 
-    filter_parts = [
-        f'logName="projects/{project_id}/logs/apigee"',
-        'jsonPayload.proxy="sample-cloud-logging"',
-    ]
-    if after_ts:
-        filter_parts.append(f'timestamp >= "{after_ts}"')
-    filter_ = " AND ".join(filter_parts)
+    now = datetime.now(timezone.utc)
+    queried_at = now.isoformat()
 
-    queried_at = datetime.now(timezone.utc).isoformat()
+    # Lower bound for the search. Clamp the caller-supplied timestamp to our own
+    # clock before subtracting the freshness window, so a browser clock running
+    # ahead can never push the floor past the server-stamped entry.
+    floor = now
+    if after_ts:
+        try:
+            client_ts = datetime.fromisoformat(after_ts.replace("Z", "+00:00"))
+            floor = min(floor, client_ts)
+        except (ValueError, TypeError):
+            pass
+    floor = floor - LOG_FRESHNESS_WINDOW
+
+    filter_ = " AND ".join(
+        [
+            f'logName="projects/{project_id}/logs/apigee"',
+            'jsonPayload.proxy="sample-cloud-logging"',
+            f'timestamp >= "{floor.isoformat()}"',
+        ]
+    )
 
     try:
         log_client = _get_logging_client()
+        # Scope to the configured project explicitly; list_entries otherwise
+        # defaults to the ADC project, which may differ from the Apigee project.
         entries = log_client.list_entries(
+            resource_names=[f"projects/{project_id}"],
             filter_=filter_,
             order_by=logging_v2.DESCENDING,
             page_size=1,
@@ -365,7 +387,7 @@ def cloud_logging_recent(after_ts: str | None = None) -> dict:
     return {
         "entry": {
             "timestamp": entry.timestamp.isoformat(),
-            "jsonPayload": dict(entry.json_payload) if entry.json_payload else {},
+            "jsonPayload": dict(entry.payload) if entry.payload else {},
         },
         "queried_at": queried_at,
     }

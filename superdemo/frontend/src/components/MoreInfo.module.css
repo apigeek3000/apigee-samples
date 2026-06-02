@@ -49,7 +49,26 @@
   overflow-x: auto;
   display: flex;
   justify-content: center;
-  min-height: 80px;
+  min-height: 220px;
+}
+
+/* The mermaid SVG is injected inside a wrapper <div> (dangerouslySetInnerHTML),
+   which is the flex item here. Without this it shrink-wraps to the SVG's natural
+   (small) size, leaving the diagram unable to grow — so make the wrapper fill the
+   window and center the SVG within it. */
+.diagram > div {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+/* Now let the SVG scale up to fill the window width so the diagram and its text
+   render larger. Mermaid pins an inline `max-width` on the <svg> at its natural
+   size; inline styles beat stylesheet rules, so !important is needed to grow past it. */
+.diagram svg {
+  width: 100% !important;
+  height: auto !important;
+  max-width: 760px !important;
 }
 
 .diagramPending {
