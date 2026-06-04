@@ -4,9 +4,10 @@ import styles from './Sidebar.module.css'
 interface Props {
   demos: DemoMetadata[]
   activeDemoId: string | null
-  onSelect: (id: string) => void
+  onSelect: (id: string | null) => void
   showStatus: boolean
   onShowStatusChange: (next: boolean) => void
+  isCollapsed?: boolean
 }
 
 const STATUS_DOT_CLASS: Record<DemoStatus, string> = {
@@ -31,16 +32,40 @@ export function Sidebar({
   onSelect,
   showStatus,
   onShowStatusChange,
+  isCollapsed = false,
 }: Props) {
   return (
-    <nav className={styles.sidebar} aria-label="Demos">
-      <div className={styles.brand}>
+    <nav
+      className={`${styles.sidebar} ${isCollapsed ? styles.collapsed : ''}`}
+      aria-label="Demos"
+      inert={isCollapsed ? '' : undefined}
+    >
+      <button
+        type="button"
+        className={styles.brand}
+        onClick={() => onSelect(null)}
+        aria-label="Apigee Superdemo home"
+      >
         <img src="/favicon.ico" alt="" className={styles.brandLogo} />
-        <span>Apigee Superdemo</span>
-      </div>
+        <span className={styles.brandName}>Apigee Superdemo</span>
+      </button>
+
+      <button
+        type="button"
+        className={`${styles.item} ${activeDemoId === null ? styles.itemActive : ''}`}
+        aria-current={activeDemoId === null ? 'page' : undefined}
+        onClick={() => onSelect(null)}
+      >
+        <span className={styles.icon} aria-hidden="true">
+          🏠
+        </span>
+        <span>Home</span>
+      </button>
+
       {demos.length === 0 && (
         <div className={styles.empty}>No demos deployed yet.</div>
       )}
+
       {demos.map((demo) => {
         const isActive = demo.id === activeDemoId
         return (
@@ -65,7 +90,9 @@ export function Sidebar({
           </button>
         )
       })}
+      
       <div className={styles.spacer} />
+      
       <label className={styles.footer}>
         <span>Show demo status</span>
         <input

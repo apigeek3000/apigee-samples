@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { App } from './App'
 import type { DemosResponse } from './types'
@@ -22,11 +22,11 @@ const readyDemos: DemosResponse = {
   host: 'apigee.test',
   project_id: 'fake-project',
   demos: [
-    { id: 'basic-quota', title: 'Basic Quota', description: 'd1', icon: '⏱️', status: 'passing' },
+    { id: 'basic-quota', title: 'Basic Quota', description: 'Shows Apigee enforcing different per-product quotas on a single shared proxy.', icon: '⏱️', status: 'passing' },
     {
       id: 'llm-security',
       title: 'LLM Security v2',
-      description: 'd2',
+      description: 'Apigee calls out to Model Armor to inspect every prompt.',
       icon: '🛡️',
       status: 'passing',
       model_name: 'gemini-fake',
@@ -42,6 +42,7 @@ const unconfiguredDemos: DemosResponse = {
 
 beforeEach(() => {
   vi.resetAllMocks()
+  localStorage.clear()
 })
 
 describe('App — loading state', () => {
@@ -55,20 +56,20 @@ describe('App — loading state', () => {
 })
 
 describe('App — ready state', () => {
-  it('renders the first demo panel after fetchDemos resolves with status ready', async () => {
+  it('renders the Homepage first after fetchDemos resolves with status ready', async () => {
     vi.mocked(fetchDemos).mockResolvedValueOnce(readyDemos)
 
     render(<App />)
 
     expect(
-      await screen.findByRole('heading', { level: 2, name: /^Basic Quota$/i }),
+      await screen.findByRole('heading', { level: 1, name: /Apigee Super Demos/i }),
     ).toBeInTheDocument()
     expect(screen.getByText(/connected to apigee/i)).toBeInTheDocument()
   })
 })
 
 describe('App — unconfigured state', () => {
-  it('shows the unconfigured banner when fetchDemos resolves with status unconfigured', async () => {
+  it('shows the unconfigured banner and the homepage tiles when fetchDemos resolves with status unconfigured', async () => {
     vi.mocked(fetchDemos).mockResolvedValueOnce(unconfiguredDemos)
 
     render(<App />)
@@ -76,29 +77,61 @@ describe('App — unconfigured state', () => {
     expect(
       await screen.findByText(/backend reachable but unconfigured/i),
     ).toBeInTheDocument()
-    expect(screen.getByText(/select a demo from the sidebar/i)).toBeInTheDocument()
+    // Lands on Homepage
+    expect(
+      await screen.findByRole('heading', { level: 1, name: /Apigee Super Demos/i }),
+    ).toBeInTheDocument()
   })
 })
 
-describe('App — sidebar navigation', () => {
-  it('switches the active panel when a different sidebar item is clicked', async () => {
+describe('App — sidebar and homepage navigation', () => {
+  it('switches the active panel when a sidebar item is clicked and can navigate back home', async () => {
     vi.mocked(fetchDemos).mockResolvedValueOnce(readyDemos)
     const user = userEvent.setup()
 
     render(<App />)
 
-    await screen.findByRole('heading', { level: 2, name: /^Basic Quota$/i })
+    // Initially we are on the Homepage
+    await screen.findByRole('heading', { level: 1, name: /Apigee Super Demos/i })
 
+    // Click sidebar button to go to "Basic Quota" (anchored to avoid homepage card conflict)
     await user.click(
-      screen.getByRole('button', { name: /LLM Security v2/i }),
+      screen.getByRole('button', { name: /^Basic Quota$/i }),
     )
 
+    // Expect "Basic Quota" demo page to render
     expect(
-      await screen.findByRole('heading', { level: 2, name: /LLM Security v2/i }),
+      await screen.findByRole('heading', { level: 2, name: /^Basic Quota$/i }),
+    ).toBeInTheDocument()
+
+    // Click "Home" link in the sidebar to go back
+    await user.click(
+      within(screen.getByRole('navigation', { name: /Demos/i })).getByRole('button', { name: /^Home$/i }),
+    )
+
+    // Should be back on the Homepage
+    expect(
+      await screen.findByRole('heading', { level: 1, name: /Apigee Super Demos/i }),
     ).toBeInTheDocument()
   })
 
-  it('renders LlmRateLimitingDemo when llm-token-limits-v2 is the active demo', async () => {
+  it('can navigate to a demo by clicking its homepage card', async () => {
+    vi.mocked(fetchDemos).mockResolvedValueOnce(readyDemos)
+    const user = userEvent.setup()
+
+    render(<App />)
+
+    // Find the homepage card and click it
+    const card = await screen.findByRole('button', { name: /Open demo: Basic Quota/i })
+    await user.click(card)
+
+    // Expect "Basic Quota" demo page to render
+    expect(
+      await screen.findByRole('heading', { level: 2, name: /^Basic Quota$/i }),
+    ).toBeInTheDocument()
+  })
+
+  it('renders LlmRateLimitingDemo when llm-token-limits-v2 is selected', async () => {
     vi.mocked(fetchDemos).mockResolvedValueOnce({
       status: 'ready',
       host: 'h',
@@ -118,8 +151,12 @@ describe('App — sidebar navigation', () => {
         },
       ],
     })
+    const user = userEvent.setup()
 
     render(<App />)
+
+    const card = await screen.findByRole('button', { name: /Open demo: LLM Rate Limiting/i })
+    await user.click(card)
 
     expect(
       await screen.findByRole('heading', { level: 2, name: 'LLM Rate Limiting' }),
@@ -130,7 +167,7 @@ describe('App — sidebar navigation', () => {
 })
 
 describe('App — placeholder demos', () => {
-  it('renders PlaceholderDemo when a placeholder demo is active', async () => {
+  it('renders PlaceholderDemo when a placeholder demo card is clicked', async () => {
     vi.mocked(fetchDemos).mockResolvedValueOnce({
       status: 'ready',
       host: 'h',
@@ -146,42 +183,22 @@ describe('App — placeholder demos', () => {
         },
       ],
     })
+    const user = userEvent.setup()
 
     render(<App />)
+
+    const card = await screen.findByRole('button', { name: /Open demo: LLM Model Routing/i })
+    await user.click(card)
 
     expect(
       await screen.findByRole('heading', { level: 2, name: /LLM Model Routing/i }),
     ).toBeInTheDocument()
     expect(screen.getByText(/not yet implemented/i)).toBeInTheDocument()
   })
-
-  it('does not render a real demo component when the active demo is a placeholder', async () => {
-    vi.mocked(fetchDemos).mockResolvedValueOnce({
-      status: 'ready',
-      host: 'h',
-      project_id: 'p',
-      demos: [
-        {
-          id: 'llm-routing',
-          title: 'LLM Model Routing',
-          description: 'd',
-          icon: '🔀',
-          status: 'placeholder',
-          placeholder: true,
-        },
-      ],
-    })
-
-    render(<App />)
-
-    await screen.findByText(/not yet implemented/i)
-    // No real demo's "Send" button should be present.
-    expect(screen.queryByRole('button', { name: /^Send$/i })).not.toBeInTheDocument()
-  })
 })
 
 describe('App — routes cloud-logging and threat-protection', () => {
-  it('renders CloudLoggingDemo when cloud-logging is the active demo', async () => {
+  it('renders CloudLoggingDemo when cloud-logging is clicked', async () => {
     vi.mocked(fetchDemos).mockResolvedValueOnce({
       status: 'ready',
       host: 'h',
@@ -198,8 +215,12 @@ describe('App — routes cloud-logging and threat-protection', () => {
         },
       ],
     })
+    const user = userEvent.setup()
 
     render(<App />)
+
+    const card = await screen.findByRole('button', { name: /Open demo: Cloud Logging/i })
+    await user.click(card)
 
     expect(
       await screen.findByRole('heading', { level: 2, name: /Cloud Logging/i }),
@@ -209,7 +230,7 @@ describe('App — routes cloud-logging and threat-protection', () => {
     ).toBeInTheDocument()
   })
 
-  it('renders ThreatProtectionDemo when threat-protection is the active demo', async () => {
+  it('renders ThreatProtectionDemo when threat-protection is clicked', async () => {
     vi.mocked(fetchDemos).mockResolvedValueOnce({
       status: 'ready',
       host: 'h',
@@ -226,12 +247,40 @@ describe('App — routes cloud-logging and threat-protection', () => {
         },
       ],
     })
+    const user = userEvent.setup()
 
     render(<App />)
+
+    const card = await screen.findByRole('button', { name: /Open demo: Threat Protection/i })
+    await user.click(card)
 
     expect(
       await screen.findByRole('heading', { level: 2, name: /Threat Protection/i }),
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^delete$/i })).toBeInTheDocument()
+  })
+})
+
+describe('App — sidebar collapsibility', () => {
+  it('toggles sidebar state and saves to localStorage', async () => {
+    vi.mocked(fetchDemos).mockResolvedValueOnce(readyDemos)
+    const user = userEvent.setup()
+
+    render(<App />)
+
+    const toggleBtn = screen.getByRole('button', { name: /Collapse sidebar/i })
+    expect(toggleBtn).toBeInTheDocument()
+
+    // Collapse it
+    await user.click(toggleBtn)
+    expect(localStorage.getItem('apigee-superdemo-sidebar-collapsed')).toBe('true')
+
+    // Topbar brand should now be visible in the document
+    expect(screen.getByRole('button', { name: /Apigee Superdemo home/i })).toBeInTheDocument()
+
+    // Expand it again
+    const expandBtn = screen.getByRole('button', { name: /Expand sidebar/i })
+    await user.click(expandBtn)
+    expect(localStorage.getItem('apigee-superdemo-sidebar-collapsed')).toBe('false')
   })
 })

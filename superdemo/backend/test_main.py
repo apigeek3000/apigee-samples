@@ -99,12 +99,16 @@ def fake_bearer_token(monkeypatch):
 
 
 def test_list_demos_unconfigured():
-    """Without GOOGLE_CLOUD_PROJECT the backend reports unconfigured."""
+    """Without GOOGLE_CLOUD_PROJECT the backend reports unconfigured and all real demos get status=unknown."""
     response = client.get("/api/demos")
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "unconfigured"
     assert len(data["demos"]) == 12
+    for demo in data["demos"]:
+        if demo.get("placeholder"):
+            continue
+        assert demo["status"] == "unknown"
 
 
 def test_list_demos_returns_metadata():
@@ -273,16 +277,6 @@ def test_list_demos_unrecognized_status_passes_through(fake_config):
     bq = next(d for d in data["demos"] if d["id"] == "basic-quota")
     assert bq["status"] == "weird"
 
-
-def test_unconfigured_demos_all_unknown():
-    """No config at all → every real demo gets status=unknown."""
-    response = client.get("/api/demos")
-    data = response.json()
-    assert data["status"] == "unconfigured"
-    for demo in data["demos"]:
-        if demo.get("placeholder"):
-            continue
-        assert demo["status"] == "unknown"
 
 
 def test_list_demos_llm_security_includes_model_info(fake_config):

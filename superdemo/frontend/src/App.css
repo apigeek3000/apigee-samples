@@ -20,6 +20,7 @@
   color: var(--text);
   background: var(--bg);
   color-scheme: dark;
+  --sidebar-width: 260px;
 }
 
 * {
@@ -49,13 +50,22 @@ code, pre {
 
 .app {
   display: grid;
-  grid-template-columns: 260px 1fr;
+  grid-template-columns: auto 1fr;
   min-height: 100vh;
 }
 
 .app__main {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.app__content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
   min-width: 0;
   padding: 24px 32px 48px;
   gap: 16px;
@@ -66,7 +76,7 @@ code, pre {
   .app {
     grid-template-columns: 1fr;
   }
-  .app__main {
+  .app__content {
     padding: 16px;
   }
 }

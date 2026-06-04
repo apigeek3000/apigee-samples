@@ -6,7 +6,25 @@
   flex-direction: column;
   gap: 6px;
   min-width: 0;
+  width: 260px;
   height: 100%;
+  flex-shrink: 0;
+  overflow-x: hidden;
+  white-space: nowrap;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              padding 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              border-right-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              visibility 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  visibility: visible;
+}
+
+/* Collapsed state modifier */
+.sidebar.collapsed {
+  width: 0;
+  padding-left: 0;
+  padding-right: 0;
+  border-right-color: transparent;
+  visibility: hidden;
 }
 
 .brand {
@@ -19,12 +37,29 @@
   padding: 0 8px 16px;
   border-bottom: 1px solid var(--border);
   margin-bottom: 8px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+  transition: opacity 0.15s ease;
+}
+
+.brand:hover {
+  opacity: 0.85;
 }
 
 .brandLogo {
   width: 24px;
   height: 24px;
   flex-shrink: 0;
+}
+
+.brandName {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .item {
@@ -39,6 +74,8 @@
   text-align: left;
   width: 100%;
   font-size: 14px;
+  outline: none;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
 .item:hover {
@@ -104,6 +141,7 @@
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
   margin: 0;
+  outline: none;
 }
 
 .toggle::before {

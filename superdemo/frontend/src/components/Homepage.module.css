@@ -1,0 +1,228 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  animation: fadeIn 0.4s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Premium Welcome Hero Card */
+.hero {
+  position: relative;
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.9) 100%);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 40px 32px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.heroGlow {
+  position: absolute;
+  top: -40%;
+  right: -10%;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(79, 140, 255, 0.2) 0%, rgba(79, 140, 255, 0) 70%);
+  filter: blur(40px);
+  pointer-events: none;
+}
+
+.title {
+  margin: 0 0 12px;
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  background: linear-gradient(90deg, var(--text) 0%, #a5b4fc 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--text-dim);
+  max-width: 760px;
+}
+
+/* Section Header */
+.gridSection {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sectionHeading {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.2px;
+}
+
+/* Card Grid Layout */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;
+}
+
+/* Single Demo Tile Card */
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  cursor: pointer;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  position: relative;
+  width: 100%;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  border-color: var(--accent);
+  box-shadow: 0 12px 24px rgba(79, 140, 255, 0.15), 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.cardPlaceholder {
+  opacity: 0.85;
+}
+
+.cardPlaceholder:hover {
+  border-color: var(--status-placeholder);
+  box-shadow: 0 12px 24px rgba(168, 85, 247, 0.1), 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Card Header & Badges */
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+.icon {
+  font-size: 28px;
+  line-height: 1;
+  transition: transform 0.25s ease;
+}
+
+.card:hover .icon {
+  transform: scale(1.15);
+}
+
+/* Badges */
+.placeholderBadge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(168, 85, 247, 0.15);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  color: #c084fc;
+}
+
+.statusBadge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.statusBadge_passing {
+  background: rgba(74, 222, 128, 0.15);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  color: #4ade80;
+}
+
+.statusBadge_failing {
+  background: rgba(251, 191, 36, 0.15);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  color: #fbbf24;
+}
+
+.statusBadge_undeployed {
+  background: rgba(248, 113, 113, 0.15);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  color: #f87171;
+}
+
+.statusBadge_unknown {
+  background: rgba(107, 114, 128, 0.15);
+  border: 1px solid rgba(107, 114, 128, 0.3);
+  color: #9ca3af;
+}
+
+/* Card Typography */
+.cardTitle {
+  margin: 0 0 10px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.cardDescription {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  flex-grow: 1;
+  margin-bottom: 20px;
+}
+
+/* Footer & Actions */
+.cardFooter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  transition: color 0.2s ease;
+}
+
+.cardPlaceholder .cardFooter {
+  color: var(--status-placeholder);
+}
+
+.arrow {
+  transition: transform 0.2s ease;
+}
+
+.card:hover .arrow {
+  transform: translateX(4px);
+}
+
+/* Responsive adjustments */
+@media (max-width: 720px) {
+  .hero {
+    padding: 24px 20px;
+  }
+  .title {
+    font-size: 26px;
+  }
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
