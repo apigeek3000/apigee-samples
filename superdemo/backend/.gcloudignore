@@ -1,0 +1,7 @@
+# Files not uploaded to Cloud Build when running `gcloud run deploy --source`.
+# Keep the build context small and reproducible (deps come from uv.lock).
+.venv
+__pycache__
+.pytest_cache
+*.pyc
+.gcloudignore

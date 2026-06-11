@@ -45,6 +45,26 @@ source ./superdemo/deploy/secret.sh
 
 To tear everything down: `./superdemo/deploy/clean-superdemo.sh`.
 
+## Deploy the app to Cloud Run (optional)
+
+The steps above deploy the Apigee *proxies* and write the `superdemo-config`
+secret. To host the web app itself (backend + frontend) instead of running it
+locally, deploy both to Cloud Run:
+
+```bash
+./superdemo/deploy/deploy-superdemo-app.sh
+```
+
+This must run **after** `deploy-superdemo.sh`, since the backend reads the
+`superdemo-config` secret. It deploys two services — `superdemo-backend`
+(FastAPI) and `superdemo-frontend` (the built SPA served by Caddy) — and prints
+a public URL to open. Both services are deployed publicly
+(`--allow-unauthenticated`). The frontend reverse-proxies `/api/*` to the
+backend, so the browser only ever sees one origin (no CORS) — the production
+twin of the Vite dev proxy described below.
+
+To tear down just the app services: `./superdemo/deploy/clean-superdemo-app.sh`.
+
 ## Local dev
 
 Two terminals, one each for the backend and frontend.

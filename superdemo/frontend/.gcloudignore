@@ -1,0 +1,7 @@
+# Files not uploaded to Cloud Build when running `gcloud run deploy --source`.
+# node_modules and dist are rebuilt inside the Dockerfile.
+node_modules
+dist
+dist-ssr
+*.local
+.gcloudignore

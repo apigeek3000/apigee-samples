@@ -35,13 +35,26 @@ app = FastAPI(
     version="1.0.0",
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS is unnecessary in the deployed topology: the frontend (Caddy) and the
+# Vite dev server both reverse-proxy /api/* to this backend, so the browser only
+# ever talks to a single origin. We therefore add CORS middleware ONLY when
+# CORS_ALLOW_ORIGINS is explicitly set (comma-separated origins) — e.g. for a
+# cross-origin dev setup. Left unset (the deployed default), the backend emits no
+# Access-Control-Allow-Origin header, so its public URL can't be read
+# cross-origin from a browser on another site.
+_cors_origins = [
+    origin.strip()
+    for origin in os.environ.get("CORS_ALLOW_ORIGINS", "").split(",")
+    if origin.strip()
+]
+if _cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 from mcp_routes import router as mcp_router  # noqa: E402
 app.include_router(mcp_router)
