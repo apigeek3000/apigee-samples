@@ -6,7 +6,7 @@ Setup, deploy, and local-development guide for the Superdemo. For an overview of
 
 **Google Cloud:**
 - A GCP project that you are Owner of with the compute.requireShieldedVm Org Policy disabled
-- [Apigee X provisioned](https://docs.cloud.google.com/apigee/docs/api-platform/get-started/provisioning-intro). A [free evaluation org](https://docs.cloud.google.com/apigee/docs/api-platform/get-started/eval-orgs) works just fine. Be sure to Configure your Apigee organization with external access enabled.
+- [Apigee X provisioned](https://docs.cloud.google.com/apigee/docs/api-platform/get-started/provisioning-intro). A [free evaluation org](https://docs.cloud.google.com/apigee/docs/api-platform/get-started/eval-orgs) works just fine, but be sure to configure your Apigee organization with external access enabled. See [this custom provisioning guide](https://github.com/apigeek3000/prep-apigee-eval) for a more in-depth walk-through.
 - Create your Model Armor template (see [`llm-security-v2/README.md`](../llm-security-v2/README.md)) — used by the **LLM Security v2** demo
 - Enable Apigee API Hub (see [`apigee-mcp/README.md`](../apigee-mcp/README.md)) — used by the **MCP Server** demo to discover tool specs
 
