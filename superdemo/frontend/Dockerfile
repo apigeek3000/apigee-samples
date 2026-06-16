@@ -30,3 +30,12 @@ RUN npm run build
 FROM caddy:2-alpine
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY --from=build /app/dist /srv
+
+# Drop privileges: Caddy listens on $PORT (8080, non-privileged), so it needs
+# no root. Give a non-root user ownership of the static root and the dirs Caddy
+# initialises at startup (/data for its local CA, /config for state). Defense in
+# depth — see CIS Docker Benchmark 4.1.
+RUN addgroup -g 10001 app \
+    && adduser -S -u 10001 -G app app \
+    && chown -R 10001:10001 /srv /data /config
+USER 10001

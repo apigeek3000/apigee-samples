@@ -427,6 +427,22 @@ def test_proxy_basic_quota_does_not_attach_bearer_token(fake_config):
     assert "authorization" not in {k.lower() for k in captured.headers.keys()}
 
 
+def test_proxy_does_not_forward_caller_authorization(fake_config):
+    """The caller's Authorization (browser Firebase ID token) must never be
+    forwarded upstream — the backend injects its own per-demo credentials."""
+    target_url = f"https://{FAKE_HOST}/v1/samples/basic-quota"
+    with respx.mock(assert_all_called=True) as mock:
+        route = mock.route(url__startswith=target_url).respond(200, json={"ok": True})
+        response = client.get(
+            "/api/proxy/basic-quota/",
+            headers={"Authorization": "Bearer caller-id-token"},
+        )
+
+    assert response.status_code == 200
+    captured = route.calls.last.request
+    assert "authorization" not in {k.lower() for k in captured.headers.keys()}
+
+
 def test_proxy_llm_token_limits_missing_adc_returns_500(fake_config, monkeypatch):
     """If ADC isn't configured, surface a 500 with an actionable message rather
     than letting the DefaultCredentialsError bubble up unhandled."""

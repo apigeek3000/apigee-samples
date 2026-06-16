@@ -18,8 +18,11 @@
 
 FROM python:3.12-slim
 
-# uv binary, copied from the official image (deps themselves are pinned via uv.lock).
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+# Install uv from PyPI. (It was previously copied from ghcr.io/astral-sh/uv, but
+# some build environments — including this Cloud Build setup — can't egress to
+# ghcr.io, only to Docker Hub + PyPI.) Pinned to the version that generated
+# uv.lock; deps themselves are pinned via the lockfile.
+RUN pip install --no-cache-dir uv==0.8.3
 
 WORKDIR /app
 
@@ -37,6 +40,13 @@ COPY . .
 # Put the synced virtualenv on PATH so we invoke uvicorn directly.
 ENV PATH="/app/.venv/bin:$PATH"
 
-# Cloud Run sets $PORT (default 8080). Shell form so $PORT expands; exec so
-# uvicorn becomes PID 1 and receives SIGTERM for graceful shutdown.
+# Drop privileges: the app only reads config over the network (Secret Manager)
+# and needs no write access or root. Running as a non-root UID is defense in
+# depth — see CIS Docker Benchmark 4.1.
+RUN useradd --system --uid 10001 --no-create-home appuser
+USER 10001
+
+# Cloud Run sets $PORT (default 8080, non-privileged). Shell form so $PORT
+# expands; exec so uvicorn becomes PID 1 and receives SIGTERM for graceful
+# shutdown.
 CMD exec uvicorn main:app --host 0.0.0.0 --port "${PORT:-8080}"

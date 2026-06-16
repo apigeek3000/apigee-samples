@@ -458,8 +458,11 @@ async def proxy_request(demo_name: str, path: str, request: Request):
             status_code=500, detail=f"API key not found for {demo_name}"
         )
 
-    # Build outbound headers — drop hop-by-hop headers
-    drop_headers = {"host", "content-length", "transfer-encoding"}
+    # Build outbound headers — drop hop-by-hop headers and the caller's
+    # Authorization (the browser's Firebase ID token). Each demo attaches its
+    # own upstream credential below (x-apikey, and a minted Vertex bearer for
+    # llm-token-limits-v2), so the inbound token must never leak upstream.
+    drop_headers = {"host", "content-length", "transfer-encoding", "authorization"}
     out_headers = {
         k: v
         for k, v in request.headers.items()
