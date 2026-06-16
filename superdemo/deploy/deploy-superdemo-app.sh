@@ -37,6 +37,7 @@ superdemo_dir="$(dirname "$scriptdir")"
 rootdir="$(dirname "$superdemo_dir")"
 
 source "${rootdir}/shlib/utils.sh"
+source "${scriptdir}/lib.sh"
 
 # ── Resolve project/region ────────────────────────────────────────────
 # basic-quota uses PROJECT; llm-security-v2 uses PROJECT_ID. Keep both set.
@@ -45,6 +46,18 @@ if [ -z "${PROJECT:-}" ] && [ -n "${PROJECT_ID:-}" ]; then
 elif [ -n "${PROJECT:-}" ] && [ -z "${PROJECT_ID:-}" ]; then
   export PROJECT_ID="$PROJECT"
 fi
+
+# Friendly preflight before shlib's check_shell_variables, which would abort
+# with a cryptic "unbound variable" under `set -u` if these are wholly unset.
+require_env_vars "$(cat <<'HINT'
+Did you forget to source your secrets? Run:
+
+  source ./superdemo/deploy/secret.sh
+
+(If you haven't created it yet, copy ./superdemo/deploy/env.sh to secret.sh,
+fill in your project's values, then source it.)
+HINT
+)" PROJECT_ID REGION || exit 1
 
 check_shell_variables PROJECT_ID REGION
 check_required_commands gcloud
@@ -88,9 +101,16 @@ echo " Provisioning app service account"
 echo "============================================="
 if ! gcloud iam service-accounts describe "$APP_SA_EMAIL" --project="$PROJECT_ID" >/dev/null 2>&1; then
   echo "  Creating $APP_SA_EMAIL..."
-  if ! gcloud iam service-accounts create "$APP_SA_NAME" \
+  if gcloud iam service-accounts create "$APP_SA_NAME" \
         --project="$PROJECT_ID" \
         --display-name="Superdemo app (Cloud Run) backend SA"; then
+    # A new SA is not instantly visible to the IAM policy API; granting roles
+    # too soon fails with "does not exist". Wait for it to propagate first.
+    echo "  Waiting for $APP_SA_EMAIL to propagate..."
+    if ! wait_for_sa "$APP_SA_EMAIL" "$PROJECT_ID"; then
+      echo "  WARN: $APP_SA_EMAIL not visible yet; role grants will retry below."
+    fi
+  else
     echo "  WARN: failed to create $APP_SA_EMAIL"
     overall_failed=1
   fi
@@ -98,18 +118,14 @@ else
   echo "  $APP_SA_EMAIL already exists."
 fi
 
-# Grant roles inline (gcloud's add-iam-policy-binding is idempotent). Same
-# bash-3.2-safe pattern as deploy-superdemo.sh — no shlib namerefs.
+# Grant roles (add-iam-policy-binding is idempotent). grant_sa_role retries with
+# backoff to ride out any remaining IAM propagation lag after SA creation.
 for role in \
     "roles/secretmanager.secretAccessor" \
     "roles/aiplatform.user" \
     "roles/logging.viewer"; do
   echo "  Granting $role to $APP_SA_EMAIL..."
-  if ! gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-        --member="serviceAccount:$APP_SA_EMAIL" \
-        --role="$role" \
-        --condition=None \
-        --quiet >/dev/null; then
+  if ! grant_sa_role "$PROJECT_ID" "$APP_SA_EMAIL" "$role"; then
     echo "  WARN: failed to grant $role"
     overall_failed=1
   fi

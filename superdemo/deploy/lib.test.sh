@@ -226,6 +226,109 @@ STUB
   fi
 ) || fail=1
 
+echo
+echo "require_env_vars: set -u-safe; lists missing vars + hint, passes when all set"
+(
+  set -u
+  # A wholly-unset var must NOT trip "unbound variable" the way shlib does.
+  unset DEMO_A DEMO_B 2>/dev/null || true
+  out=$(require_env_vars "source your secrets" DEMO_A DEMO_B 2>&1)
+  rc=$?
+  if (( rc == 1 )) \
+     && [[ "$out" == *"DEMO_A DEMO_B"* ]] \
+     && [[ "$out" == *"source your secrets"* ]]; then
+    echo "PASS:   missing vars reported with hint, exit 1"
+  else
+    echo "FAIL:   rc=$rc out='$out'"
+    exit 1
+  fi
+
+  export DEMO_A=set DEMO_B=set
+  if require_env_vars "hint" DEMO_A DEMO_B >/dev/null 2>&1; then
+    echo "PASS:   all-set returns 0"
+  else
+    echo "FAIL:   expected 0 when all vars set"
+    exit 1
+  fi
+) || fail=1
+
+echo
+echo "wait_for_sa: returns once describe succeeds, fails if it never does"
+(
+  # Stub gcloud to succeed only on the 2nd describe call (counter via temp file).
+  stub_dir=$(mktemp -d /tmp/superdemo-stub.XXXXXX)
+  count_file="$stub_dir/count"
+  echo 0 > "$count_file"
+  cat > "$stub_dir/gcloud" <<STUB
+#!/bin/bash
+n=\$(cat "$count_file")
+n=\$((n + 1))
+echo "\$n" > "$count_file"
+[[ "\$n" -ge 2 ]]
+STUB
+  chmod +x "$stub_dir/gcloud"
+  export PATH="$stub_dir:$PATH"
+
+  # Override sleep so the test doesn't actually wait.
+  sleep() { :; }
+
+  if wait_for_sa "sa@x.iam.gserviceaccount.com" "proj" 5 0; then
+    echo "PASS:   succeeds once SA becomes visible"
+  else
+    echo "FAIL:   expected success within max attempts"
+    rm -rf "$stub_dir"; exit 1
+  fi
+
+  echo 0 > "$count_file"
+  # Now make describe always fail and cap attempts low.
+  cat > "$stub_dir/gcloud" <<'STUB'
+#!/bin/bash
+exit 1
+STUB
+  chmod +x "$stub_dir/gcloud"
+  if wait_for_sa "sa@x.iam.gserviceaccount.com" "proj" 2 0; then
+    echo "FAIL:   expected failure when SA never appears"
+    rm -rf "$stub_dir"; exit 1
+  else
+    echo "PASS:   fails when SA never appears"
+  fi
+  rm -rf "$stub_dir"
+) || fail=1
+
+echo
+echo "grant_sa_role: retries transient failures, succeeds on a later attempt"
+(
+  stub_dir=$(mktemp -d /tmp/superdemo-stub.XXXXXX)
+  count_file="$stub_dir/count"
+  echo 0 > "$count_file"
+  # Fail the first 2 binding attempts (simulating IAM propagation), then succeed.
+  cat > "$stub_dir/gcloud" <<STUB
+#!/bin/bash
+n=\$(cat "$count_file")
+n=\$((n + 1))
+echo "\$n" > "$count_file"
+[[ "\$n" -ge 3 ]]
+STUB
+  chmod +x "$stub_dir/gcloud"
+  export PATH="$stub_dir:$PATH"
+  sleep() { :; }
+
+  if grant_sa_role "proj" "sa@x.iam.gserviceaccount.com" "roles/foo" 5; then
+    attempts=$(cat "$count_file")
+    rm -rf "$stub_dir"
+    if [[ "$attempts" == "3" ]]; then
+      echo "PASS:   succeeded on attempt 3 after retrying"
+    else
+      echo "FAIL:   expected 3 attempts, got $attempts"
+      exit 1
+    fi
+  else
+    rm -rf "$stub_dir"
+    echo "FAIL:   expected eventual success"
+    exit 1
+  fi
+) || fail=1
+
 if (( fail != 0 )); then
   echo
   echo "FAIL: some tests failed"
