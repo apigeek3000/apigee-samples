@@ -57,7 +57,9 @@ if _cors_origins:
     )
 
 from mcp_routes import router as mcp_router  # noqa: E402
-app.include_router(mcp_router)
+from auth import get_current_user  # noqa: E402
+from fastapi import Depends  # noqa: E402
+app.include_router(mcp_router, dependencies=[Depends(get_current_user)])
 
 # ── Config cache ──────────────────────────────────────────────────────
 _config_cache: dict | None = None
@@ -290,7 +292,7 @@ def _demo_with_metadata(demo: dict, demo_config: dict) -> dict:
     return enriched
 
 
-@app.get("/api/demos")
+@app.get("/api/demos", dependencies=[Depends(get_current_user)])
 def list_demos():
     """Return available demos with per-demo status and llm-security model config."""
     try:
@@ -314,7 +316,7 @@ def list_demos():
         }
 
 
-@app.post("/api/config/reload")
+@app.post("/api/config/reload", dependencies=[Depends(get_current_user)])
 def reload_config():
     """Force-refresh the cached config from Secret Manager."""
     global _config_cache
@@ -323,7 +325,7 @@ def reload_config():
     return {"status": "reloaded"}
 
 
-@app.get("/api/cloud-logging/recent")
+@app.get("/api/cloud-logging/recent", dependencies=[Depends(get_current_user)])
 def cloud_logging_recent(after_ts: str | None = None) -> dict:
     """
     Return the most recent sample-cloud-logging entry, best-effort.
@@ -416,6 +418,7 @@ DEMOS_REQUIRING_KEY = {"basic-quota", "llm-security", "llm-token-limits-v2"}
 @app.api_route(
     "/api/proxy/{demo_name}/{path:path}",
     methods=["GET", "POST", "PUT", "DELETE"],
+    dependencies=[Depends(get_current_user)],
 )
 async def proxy_request(demo_name: str, path: str, request: Request):
     """

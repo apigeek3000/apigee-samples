@@ -5,3 +5,5 @@ dist
 dist-ssr
 *.local
 .gcloudignore
+.env.example
+.env

@@ -786,3 +786,21 @@ def test_cloud_logging_recent_no_project(monkeypatch):
 
     assert response.status_code == 500
     assert "GOOGLE_CLOUD_PROJECT" in response.json()["detail"]
+
+
+def test_demos_requires_auth(monkeypatch):
+    # Temporarily drop the autouse override to exercise the real 401 path.
+    # Auth is off by default locally, so force it on for this test.
+    from auth import get_current_user
+
+    monkeypatch.setenv("AUTH_ENABLED", "true")
+    app.dependency_overrides.pop(get_current_user, None)
+    try:
+        resp = client.get("/api/demos")
+        assert resp.status_code == 401
+    finally:
+        # Restore so later tests in this session keep the override.
+        app.dependency_overrides[get_current_user] = lambda: {
+            "email": "tester@example.com",
+            "uid": "test-uid",
+        }

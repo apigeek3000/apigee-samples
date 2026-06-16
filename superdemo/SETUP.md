@@ -1,6 +1,6 @@
 # Superdemo setup
 
-Setup, deploy, and local-development guide for the Superdemo. For an overview of what the app is, see [README.md](README.md). For a presenter-facing walkthrough of each demo, see [GUIDE.md](GUIDE.md).
+Setup and local-development guide for the Superdemo. For an overview of what the app is, see [README.md](README.md). To optionally host the app on Cloud Run with Firebase authentication, see [DEPLOY.md](DEPLOY.md). For a presenter-facing walkthrough of each demo, see [GUIDE.md](GUIDE.md).
 
 ## Prerequisites
 
@@ -45,26 +45,6 @@ source ./superdemo/deploy/secret.sh
 
 To tear everything down: `./superdemo/deploy/clean-superdemo.sh`.
 
-## Deploy the app to Cloud Run (optional)
-
-The steps above deploy the Apigee *proxies* and write the `superdemo-config`
-secret. To host the web app itself (backend + frontend) instead of running it
-locally, deploy both to Cloud Run:
-
-```bash
-./superdemo/deploy/deploy-superdemo-app.sh
-```
-
-This must run **after** `deploy-superdemo.sh`, since the backend reads the
-`superdemo-config` secret. It deploys two services — `superdemo-backend`
-(FastAPI) and `superdemo-frontend` (the built SPA served by Caddy) — and prints
-a public URL to open. Both services are deployed publicly
-(`--allow-unauthenticated`). The frontend reverse-proxies `/api/*` to the
-backend, so the browser only ever sees one origin (no CORS) — the production
-twin of the Vite dev proxy described below.
-
-To tear down just the app services: `./superdemo/deploy/clean-superdemo-app.sh`.
-
 ## Local dev
 
 Two terminals, one each for the backend and frontend.
@@ -82,8 +62,10 @@ npm run dev
 ```
 
 Vite proxies `/api/*` to the backend, so the app uses same-origin requests
-with no CORS setup. Open http://localhost:5173 and pick a demo from the
-sidebar.
+with no CORS setup. Open http://localhost:5173 and pick a demo from the sidebar
+— **local dev runs without sign-in** (auth is off by default and only turns on
+when deployed to Cloud Run). To exercise the real Firebase sign-in flow locally,
+see [DEPLOY.md](DEPLOY.md) → *How the auth toggle works*.
 
 Backend API docs: FastAPI auto-generates interactive Swagger UI at
 http://localhost:8000/docs and ReDoc at http://localhost:8000/redoc. The
@@ -105,3 +87,7 @@ cd superdemo/frontend && npm test -- --run
 # Deploy bash helpers
 bash superdemo/deploy/lib.test.sh
 ```
+
+## What's next?
+- **[Cloud Run deploy guide → DEPLOY.md](DEPLOY.md)** — optionally host the app on Cloud Run with Firebase Google sign-in and an access allowlist.
+- **[Presenter guide → GUIDE.md](GUIDE.md)** — a walkthrough of each demo: what to click, what to say, what the audience should notice.

@@ -1,13 +1,66 @@
 import { describe, it, expect, vi, afterEach, beforeEach, type Mock } from 'vitest'
 import {
+  authedFetch,
   fetchDemos,
   parseQuotaResponse,
   sendBasicQuota,
   sendLlmSecurity,
 } from './api'
 
+vi.mock('./auth', () => ({
+  authEnabled: true,
+  auth: { currentUser: { getIdToken: vi.fn().mockResolvedValue('tok-123') } },
+}))
+
 afterEach(() => {
   vi.unstubAllGlobals()
+})
+
+describe('authedFetch', () => {
+  it('attaches the bearer token to the request', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response('{}', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await authedFetch('/api/demos')
+
+    const init = fetchMock.mock.calls[0][1]
+    expect(init.headers.get('Authorization')).toBe('Bearer tok-123')
+    vi.unstubAllGlobals()
+  })
+
+  it('refreshes the token once and retries on 401', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('', { status: 401 }))
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const resp = await authedFetch('/api/demos')
+
+    expect(resp.status).toBe(200)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    vi.unstubAllGlobals()
+  })
+
+  it('attaches no Authorization header when auth is disabled', async () => {
+    vi.resetModules()
+    vi.doMock('./auth', () => ({ authEnabled: false, auth: null }))
+    const { authedFetch: af } = await import('./api')
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response('{}', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await af('/api/demos')
+
+    const init = fetchMock.mock.calls[0][1]
+    expect(init.headers.get('Authorization')).toBeNull()
+    vi.unstubAllGlobals()
+    vi.doUnmock('./auth')
+    vi.resetModules()
+  })
 })
 
 function mockFetch(): Mock {
@@ -91,7 +144,9 @@ describe('fetchDemos', () => {
 
     const result = await fetchDemos()
 
-    expect(fetch).toHaveBeenCalledWith('/api/demos')
+    const [url, init] = fetch.mock.calls[0]
+    expect(url).toBe('/api/demos')
+    expect((init.headers as Headers).get('Authorization')).toBe('Bearer tok-123')
     expect(result.status).toBe('ready')
     expect(result.demos).toHaveLength(1)
     expect(result.demos[0].status).toBe('passing')
@@ -189,10 +244,11 @@ describe('sendBasicQuota', () => {
 
     await sendBasicQuota('premium')
 
-    expect(fetch).toHaveBeenCalledWith('/api/proxy/basic-quota', {
-      method: 'GET',
-      headers: { 'x-quota-tier': 'premium' },
-    })
+    const [url, init] = fetch.mock.calls[0]
+    expect(url).toBe('/api/proxy/basic-quota/')
+    expect(init.method).toBe('GET')
+    expect((init.headers as Headers).get('x-quota-tier')).toBe('premium')
+    expect((init.headers as Headers).get('Authorization')).toBe('Bearer tok-123')
   })
 
   it('parses response via parseQuotaResponse', async () => {
@@ -581,13 +637,10 @@ describe('sendThreatJson', () => {
     expect(result.blocked).toBe(false)
     expect(result.policy).toBe('json')
     expect(result.httpStatus).toBe(200)
-    expect(fetch).toHaveBeenCalledWith(
-      '/api/proxy/threat-protection/echo',
-      expect.objectContaining({
-        method: 'POST',
-        headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
-      }),
-    )
+    const [url, init] = fetch.mock.calls[0]
+    expect(url).toBe('/api/proxy/threat-protection/echo')
+    expect(init.method).toBe('POST')
+    expect((init.headers as Headers).get('Content-Type')).toBe('application/json')
   })
 
   it('returns blocked=true on 500', async () => {

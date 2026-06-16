@@ -136,13 +136,17 @@ echo
 echo "============================================="
 echo " Deploying $BACKEND_SERVICE to Cloud Run"
 echo "============================================="
+if [[ -z "${ALLOWED_DOMAINS:-}" && -z "${ALLOWED_EMAILS:-}" ]]; then
+  echo "  WARN: ALLOWED_DOMAINS and ALLOWED_EMAILS are both empty —"
+  echo "        the app will deny ALL sign-ins (fail-closed). Set at least one in secret.sh."
+fi
 backend_status="deployed"
 if ! gcloud run deploy "$BACKEND_SERVICE" \
       --source "$superdemo_dir/backend" \
       --region "$REGION" \
       --project "$PROJECT_ID" \
       --service-account "$APP_SA_EMAIL" \
-      --set-env-vars "GOOGLE_CLOUD_PROJECT=$PROJECT_ID" \
+      --set-env-vars "^|^GOOGLE_CLOUD_PROJECT=$PROJECT_ID|FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID:-$PROJECT_ID}|AUTH_ENABLED=true|ALLOWED_DOMAINS=${ALLOWED_DOMAINS:-}|ALLOWED_EMAILS=${ALLOWED_EMAILS:-}" \
       --allow-unauthenticated \
       --quiet; then
   backend_status="failed"
@@ -170,6 +174,22 @@ if [[ -z "$BACKEND_HOST" ]]; then
   echo "  Skipping: backend did not deploy, so there's no /api upstream to point at."
 else
   echo "  Frontend will proxy /api/* to https://$BACKEND_HOST"
+
+  # Vite reads .env.production at build time. gcloud run deploy --source can't
+  # pass Docker build args, so materialise the public Firebase web config here.
+  # Removed on exit so a failed deploy never leaves it behind. It is gitignored
+  # (root .env.* rule) and not excluded by frontend/.gcloudignore, so it reaches
+  # the Cloud Build context.
+  FRONTEND_ENV_FILE="$superdemo_dir/frontend/.env.production"
+  cat > "$FRONTEND_ENV_FILE" <<EOF
+VITE_AUTH_ENABLED=true
+VITE_FIREBASE_API_KEY=${FIREBASE_API_KEY:-}
+VITE_FIREBASE_AUTH_DOMAIN=${FIREBASE_AUTH_DOMAIN:-}
+VITE_FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID:-}
+VITE_FIREBASE_APP_ID=${FIREBASE_APP_ID:-}
+EOF
+  trap 'rm -f "$FRONTEND_ENV_FILE"' EXIT
+
   frontend_status="deployed"
   if ! gcloud run deploy "$FRONTEND_SERVICE" \
         --source "$superdemo_dir/frontend" \

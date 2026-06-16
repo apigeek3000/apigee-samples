@@ -17,6 +17,29 @@ vi.mock('./api', () => ({
 
 import { fetchDemos } from './api'
 
+const signedIn = { email: 'tester@example.com', uid: 'u1' }
+let authState = {
+  user: signedIn as unknown,
+  loading: false,
+  signIn: vi.fn(),
+  signOut: vi.fn(),
+}
+vi.mock('./hooks/useAuth', () => ({
+  useAuth: () => authState,
+}))
+
+// authEnabled is read by App directly from ./auth; make it controllable so we
+// can exercise both the gated (Cloud Run) and ungated (local dev) paths.
+const authConfig = vi.hoisted(() => ({ enabled: true }))
+vi.mock('./auth', () => ({
+  get authEnabled() {
+    return authConfig.enabled
+  },
+  auth: null,
+  signInWithGoogle: vi.fn(),
+  signOutUser: vi.fn(),
+}))
+
 const readyDemos: DemosResponse = {
   status: 'ready',
   host: 'apigee.test',
@@ -43,6 +66,8 @@ const unconfiguredDemos: DemosResponse = {
 beforeEach(() => {
   vi.resetAllMocks()
   localStorage.clear()
+  authState = { user: signedIn as unknown, loading: false, signIn: vi.fn(), signOut: vi.fn() }
+  authConfig.enabled = true
 })
 
 describe('App — loading state', () => {
@@ -282,5 +307,35 @@ describe('App — sidebar collapsibility', () => {
     const expandBtn = screen.getByRole('button', { name: /Expand sidebar/i })
     await user.click(expandBtn)
     expect(localStorage.getItem('apigee-superdemo-sidebar-collapsed')).toBe('false')
+  })
+})
+
+describe('App — auth gating', () => {
+  it('shows the LoginScreen when no user is signed in', async () => {
+    authState = { user: null, loading: false, signIn: vi.fn(), signOut: vi.fn() }
+    render(<App />)
+    expect(
+      await screen.findByRole('button', { name: /sign in with google/i }),
+    ).toBeInTheDocument()
+  })
+
+  it('shows access-denied when the backend rejects with 403', async () => {
+    authState = { user: signedIn as unknown, loading: false, signIn: vi.fn(), signOut: vi.fn() }
+    vi.mocked(fetchDemos).mockRejectedValueOnce({ status: 403, message: 'Not authorized' })
+    render(<App />)
+    expect(await screen.findByText(/not authorized/i)).toBeInTheDocument()
+  })
+
+  it('skips the LoginScreen and loads demos when auth is disabled (local dev)', async () => {
+    authConfig.enabled = false
+    authState = { user: null, loading: false, signIn: vi.fn(), signOut: vi.fn() }
+    vi.mocked(fetchDemos).mockResolvedValueOnce(readyDemos)
+    render(<App />)
+    expect(
+      await screen.findByRole('heading', { level: 1, name: /Apigee Super Demos/i }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /sign in with google/i }),
+    ).not.toBeInTheDocument()
   })
 })

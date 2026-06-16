@@ -50,3 +50,22 @@ export MODEL_NAME="gemini-2.5-flash"
 # (so mcp-spec-tools can read specs from API hub at runtime). Override SA_EMAIL only
 # if you have a pre-existing SA with these roles you'd rather reuse.
 export SA_EMAIL="${MCP_SERVICE_ACCOUNT_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
+
+# ── Firebase authentication (Cloud Run deploy only) ───────────────────
+# Only needed when hosting the app on Cloud Run — see DEPLOY.md. Local dev
+# does NOT require auth (it's off by default; set AUTH_ENABLED=true / a local
+# frontend/.env with VITE_AUTH_ENABLED=true to test it locally).
+# export AUTH_ENABLED=true # Uncomment if you want to test auth locally
+
+# Public Firebase web config (safe in the browser). Get these from the
+# Firebase Console → Project settings → your Web app.
+export FIREBASE_API_KEY="REPLACE_WITH_FIREBASE_WEB_API_KEY"
+export FIREBASE_AUTH_DOMAIN="REPLACE_WITH_PROJECT.firebaseapp.com"
+export FIREBASE_PROJECT_ID="REPLACE_WITH_FIREBASE_PROJECT_ID"
+export FIREBASE_APP_ID="REPLACE_WITH_FIREBASE_WEB_APP_ID"
+
+# Access allowlist (comma-separated; either may be empty). A sign-in is allowed
+# if the email's domain is in ALLOWED_DOMAINS OR the exact address is in
+# ALLOWED_EMAILS. If BOTH are empty, ALL sign-ins are denied (fail closed).
+export ALLOWED_DOMAINS="example.com"
+export ALLOWED_EMAILS=""
