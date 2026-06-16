@@ -35,16 +35,31 @@ app = FastAPI(
     version="1.0.0",
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS is unnecessary in the deployed topology: the frontend (Caddy) and the
+# Vite dev server both reverse-proxy /api/* to this backend, so the browser only
+# ever talks to a single origin. We therefore add CORS middleware ONLY when
+# CORS_ALLOW_ORIGINS is explicitly set (comma-separated origins) — e.g. for a
+# cross-origin dev setup. Left unset (the deployed default), the backend emits no
+# Access-Control-Allow-Origin header, so its public URL can't be read
+# cross-origin from a browser on another site.
+_cors_origins = [
+    origin.strip()
+    for origin in os.environ.get("CORS_ALLOW_ORIGINS", "").split(",")
+    if origin.strip()
+]
+if _cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 from mcp_routes import router as mcp_router  # noqa: E402
-app.include_router(mcp_router)
+from auth import get_current_user  # noqa: E402
+from fastapi import Depends  # noqa: E402
+app.include_router(mcp_router, dependencies=[Depends(get_current_user)])
 
 # ── Config cache ──────────────────────────────────────────────────────
 _config_cache: dict | None = None
@@ -277,7 +292,7 @@ def _demo_with_metadata(demo: dict, demo_config: dict) -> dict:
     return enriched
 
 
-@app.get("/api/demos")
+@app.get("/api/demos", dependencies=[Depends(get_current_user)])
 def list_demos():
     """Return available demos with per-demo status and llm-security model config."""
     try:
@@ -301,7 +316,7 @@ def list_demos():
         }
 
 
-@app.post("/api/config/reload")
+@app.post("/api/config/reload", dependencies=[Depends(get_current_user)])
 def reload_config():
     """Force-refresh the cached config from Secret Manager."""
     global _config_cache
@@ -310,7 +325,7 @@ def reload_config():
     return {"status": "reloaded"}
 
 
-@app.get("/api/cloud-logging/recent")
+@app.get("/api/cloud-logging/recent", dependencies=[Depends(get_current_user)])
 def cloud_logging_recent(after_ts: str | None = None) -> dict:
     """
     Return the most recent sample-cloud-logging entry, best-effort.
@@ -403,6 +418,7 @@ DEMOS_REQUIRING_KEY = {"basic-quota", "llm-security", "llm-token-limits-v2"}
 @app.api_route(
     "/api/proxy/{demo_name}/{path:path}",
     methods=["GET", "POST", "PUT", "DELETE"],
+    dependencies=[Depends(get_current_user)],
 )
 async def proxy_request(demo_name: str, path: str, request: Request):
     """
@@ -442,8 +458,11 @@ async def proxy_request(demo_name: str, path: str, request: Request):
             status_code=500, detail=f"API key not found for {demo_name}"
         )
 
-    # Build outbound headers — drop hop-by-hop headers
-    drop_headers = {"host", "content-length", "transfer-encoding"}
+    # Build outbound headers — drop hop-by-hop headers and the caller's
+    # Authorization (the browser's Firebase ID token). Each demo attaches its
+    # own upstream credential below (x-apikey, and a minted Vertex bearer for
+    # llm-token-limits-v2), so the inbound token must never leak upstream.
+    drop_headers = {"host", "content-length", "transfer-encoding", "authorization"}
     out_headers = {
         k: v
         for k, v in request.headers.items()

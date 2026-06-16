@@ -16,6 +16,69 @@
 
 # Superdemo-only helpers. Not shared with sibling demos.
 
+# require_env_vars <hint> <var_name...>
+#
+# set -u-safe preflight for the vars sourced from secret.sh. shlib's
+# check_shell_variables expands `${!var}` with no default, so a *wholly unset*
+# var aborts with a cryptic "unbound variable" under `set -u` before it can
+# report which var is missing. This checks first with `${!var:-}` (safe), and
+# if any are empty/unset prints them plus <hint> and returns 1 (caller exits).
+require_env_vars() {
+  local hint="$1"; shift
+  local missing=() v
+  for v in "$@"; do
+    if [[ -z "${!v:-}" ]]; then
+      missing+=("$v")
+    fi
+  done
+  if (( ${#missing[@]} != 0 )); then
+    printf "ERROR: missing required environment variable(s): %s\n" "${missing[*]}" >&2
+    printf "%s\n" "$hint" >&2
+    return 1
+  fi
+  return 0
+}
+
+# wait_for_sa <sa_email> <project> [max_attempts] [delay_seconds]
+#
+# A freshly created service account is not immediately visible to the IAM
+# policy API, so `add-iam-policy-binding` can fail with "does not exist". Poll
+# `describe` until the SA appears. Returns 0 once visible, 1 if it never does.
+wait_for_sa() {
+  local sa_email="$1" project="$2" max="${3:-12}" delay="${4:-5}" i
+  for (( i = 1; i <= max; i++ )); do
+    if gcloud iam service-accounts describe "$sa_email" \
+          --project="$project" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep "$delay"
+  done
+  return 1
+}
+
+# grant_sa_role <project> <sa_email> <role> [max_attempts]
+#
+# add-iam-policy-binding is idempotent, but right after SA creation it can still
+# fail transiently ("does not exist") while the new SA propagates to the IAM
+# policy backend. Retry with a linear backoff. Returns 0 on success, 1 if all
+# attempts fail.
+grant_sa_role() {
+  local project="$1" sa_email="$2" role="$3" max="${4:-5}" i
+  for (( i = 1; i <= max; i++ )); do
+    if gcloud projects add-iam-policy-binding "$project" \
+          --member="serviceAccount:$sa_email" \
+          --role="$role" \
+          --condition=None \
+          --quiet >/dev/null 2>&1; then
+      return 0
+    fi
+    if (( i < max )); then
+      sleep $(( i * 3 ))
+    fi
+  done
+  return 1
+}
+
 # is_proxy_deployed_to_env <proxy_name> <env> <org> <token>
 #
 # Returns 0 if the proxy has any active revision deployed in <env>.

@@ -40,5 +40,6 @@ flowchart LR
 
 ## Getting Started
 
-- **[Setup & deploy guide → setup.md](SETUP.md)** — prerequisites, one-time deploy, local dev, and testing.
+- **[Setup & local dev guide → SETUP.md](SETUP.md)** — prerequisites, one-time proxy deploy, running locally, and testing.
+- **[Cloud Run deploy guide → DEPLOY.md](DEPLOY.md)** — optionally host the app on Cloud Run with Firebase Google sign-in and an access allowlist.
 - **[Presenter guide → GUIDE.md](GUIDE.md)** — a walkthrough of each demo: what to click, what to say, what the audience should notice.

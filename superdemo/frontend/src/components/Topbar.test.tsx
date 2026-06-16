@@ -81,5 +81,23 @@ describe('Topbar', () => {
     await user.click(screen.getByRole('button', { name: /Go to Home/i }))
     expect(onNavigateHome).toHaveBeenCalled()
   })
+
+  it('shows the user email and a sign-out button', async () => {
+    const onSignOut = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <Topbar
+        isSidebarCollapsed={false}
+        onToggleSidebar={() => {}}
+        activeDemo={null}
+        onNavigateHome={() => {}}
+        userEmail="tester@example.com"
+        onSignOut={onSignOut}
+      />,
+    )
+    expect(screen.getByText('tester@example.com')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /sign out/i }))
+    expect(onSignOut).toHaveBeenCalledOnce()
+  })
 })
 

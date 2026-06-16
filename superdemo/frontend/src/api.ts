@@ -16,8 +16,33 @@ import type {
   VertexContent,
 } from './types'
 
+import { auth, authEnabled } from './auth'
+
 const DEMOS_URL = '/api/demos'
 const PROXY_PREFIX = '/api/proxy'
+
+/**
+ * fetch wrapper that attaches the Firebase ID token. On a 401 (expired token)
+ * it force-refreshes once and retries — the security check itself lives on the
+ * backend. When auth is disabled (local dev by default) it's a plain fetch.
+ */
+export async function authedFetch(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  _retried = false,
+): Promise<Response> {
+  const user = authEnabled ? auth?.currentUser : null
+  const headers = new Headers(init.headers)
+  if (user) {
+    const token = await user.getIdToken(_retried)
+    headers.set('Authorization', `Bearer ${token}`)
+  }
+  const response = await fetch(input, { ...init, headers })
+  if (response.status === 401 && user && !_retried) {
+    return authedFetch(input, init, true)
+  }
+  return response
+}
 
 const VALID_STATUSES: ReadonlySet<DemoStatus> = new Set<DemoStatus>([
   'passing',
@@ -74,7 +99,7 @@ async function parseError(response: Response): Promise<ApiError> {
 }
 
 export async function fetchDemos(): Promise<DemosResponse> {
-  const response = await fetch(DEMOS_URL)
+  const response = await authedFetch(DEMOS_URL)
   if (!response.ok) {
     throw await parseError(response)
   }
@@ -88,7 +113,10 @@ export async function fetchDemos(): Promise<DemosResponse> {
 }
 
 export async function sendBasicQuota(tier: QuotaTier): Promise<QuotaResponse> {
-  const response = await fetch(`${PROXY_PREFIX}/basic-quota`, {
+  // Trailing slash matters: the proxy route is /api/proxy/{demo}/{path:path},
+  // so without it the backend issues a 307 to the slashed URL — which, in local
+  // dev, redirects cross-origin (:8000) out of the Vite proxy and trips CORS.
+  const response = await authedFetch(`${PROXY_PREFIX}/basic-quota/`, {
     method: 'GET',
     headers: { 'x-quota-tier': tier },
   })
@@ -122,7 +150,7 @@ interface LlmRequest {
 
 export async function sendLlmSecurity(req: LlmRequest): Promise<unknown> {
   const path = `v1/projects/${req.projectId}/locations/${req.region}/publishers/google/models/${req.model}:generateContent`
-  const response = await fetch(`${PROXY_PREFIX}/llm-security/${path}`, {
+  const response = await authedFetch(`${PROXY_PREFIX}/llm-security/${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -185,7 +213,7 @@ export async function sendLlmRateLimiting(
   req: LlmRateLimitingRequest,
 ): Promise<RateLimitResponse> {
   const path = `v1/projects/${req.projectId}/locations/${req.region}/publishers/google/models/${req.model}:generateContent`
-  const response = await fetch(`${PROXY_PREFIX}/llm-token-limits-v2/${path}`, {
+  const response = await authedFetch(`${PROXY_PREFIX}/llm-token-limits-v2/${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -229,7 +257,7 @@ function parseRateLimitResponse(raw: unknown): RateLimitResponse {
 }
 
 export async function fetchMcpTools(): Promise<McpTool[]> {
-  const response = await fetch(`${PROXY_PREFIX}/apigee-mcp/tools`)
+  const response = await authedFetch(`${PROXY_PREFIX}/apigee-mcp/tools`)
   if (!response.ok) {
     throw await parseError(response)
   }
@@ -245,7 +273,7 @@ export async function streamMcpChat(
   prompt: string,
   onEvent: (event: McpChatEvent) => void,
 ): Promise<void> {
-  const response = await fetch(`${PROXY_PREFIX}/apigee-mcp/chat`, {
+  const response = await authedFetch(`${PROXY_PREFIX}/apigee-mcp/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ session_id: sessionId, prompt }),
@@ -294,7 +322,7 @@ export async function streamMcpChat(
 
 export async function sendCloudLogging(): Promise<CloudLoggingResponse> {
   const sentAt = new Date().toISOString()
-  const response = await fetch(`${PROXY_PREFIX}/cloud-logging/`, {
+  const response = await authedFetch(`${PROXY_PREFIX}/cloud-logging/`, {
     method: 'GET',
   })
   const text = await response.text()
@@ -319,7 +347,7 @@ export async function fetchRecentLog(
   afterIso: string,
 ): Promise<RecentLogResponse> {
   const url = `/api/cloud-logging/recent?after_ts=${encodeURIComponent(afterIso)}`
-  const response = await fetch(url)
+  const response = await authedFetch(url)
   if (!response.ok) {
     throw await parseError(response)
   }
@@ -331,7 +359,7 @@ export async function fetchRecentLog(
 
 export async function sendThreatRegex(query: string): Promise<ThreatResponse> {
   const url = `${PROXY_PREFIX}/threat-protection/json?query=${encodeURIComponent(query).replace(/%20/g, '+')}`
-  const response = await fetch(url, { method: 'GET' })
+  const response = await authedFetch(url, { method: 'GET' })
   const text = await response.text()
   let body: unknown
   try {
@@ -349,7 +377,7 @@ export async function sendThreatRegex(query: string): Promise<ThreatResponse> {
 }
 
 export async function sendThreatJson(body: object): Promise<ThreatResponse> {
-  const response = await fetch(`${PROXY_PREFIX}/threat-protection/echo`, {
+  const response = await authedFetch(`${PROXY_PREFIX}/threat-protection/echo`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),

@@ -1,0 +1,43 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Caddy config for the superdemo frontend container.
+# $PORT          — injected by Cloud Run (default 8080).
+# $BACKEND_HOST  — backend Cloud Run host (no scheme), set by deploy-superdemo-app.sh.
+{
+	# Cloud Run terminates TLS at the edge; serve plain HTTP inside the container.
+	auto_https off
+	admin off
+}
+
+:{$PORT:8080} {
+	encode gzip
+
+	# Reverse-proxy the API to the backend service. The browser sees this as a
+	# same-origin /api/* path, so no CORS is involved. Rewrite the Host header to
+	# the backend's so Cloud Run routes to the right service, and use TLS upstream.
+	handle /api/* {
+		reverse_proxy https://{$BACKEND_HOST} {
+			header_up Host {$BACKEND_HOST}
+		}
+	}
+
+	# Everything else is the static SPA. Unknown paths fall back to index.html so
+	# client-side routing works.
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

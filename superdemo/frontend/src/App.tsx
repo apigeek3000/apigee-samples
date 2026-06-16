@@ -13,13 +13,18 @@ import { ApigeeMcpDemo } from './components/ApigeeMcpDemo'
 import { CloudLoggingDemo } from './components/CloudLoggingDemo'
 import { ThreatProtectionDemo } from './components/ThreatProtectionDemo'
 import { EmptyState } from './components/EmptyState'
+import { LoginScreen } from './components/LoginScreen'
 import { useShowStatus } from './hooks/useShowStatus'
+import { useAuth } from './hooks/useAuth'
+import { authEnabled } from './auth'
 
 export function App() {
   const [demos, setDemos] = useState<DemosResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [activeDemoId, setActiveDemoId] = useState<string | null>(null)
   const [showStatus, setShowStatus] = useShowStatus()
+  const { user, loading: authLoading, signIn, signOut } = useAuth()
+  const [accessDenied, setAccessDenied] = useState(false)
   
   // Persisted collapsible sidebar state
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
@@ -28,21 +33,54 @@ export function App() {
   })
 
   useEffect(() => {
+    // When auth is on, wait for sign-in; when off, fetch immediately.
+    if (authEnabled && !user) return
     fetchDemos()
       .then((data) => {
         setDemos(data)
+        setAccessDenied(false)
       })
       .catch((err: unknown) => {
+        if (
+          err &&
+          typeof err === 'object' &&
+          'status' in err &&
+          (err as { status: number }).status === 403
+        ) {
+          setAccessDenied(true)
+          return
+        }
         const msg = err instanceof Error ? err.message : String(err)
         setError(`Backend unreachable: ${msg}`)
       })
-  }, [])
+  }, [user])
 
   useEffect(() => {
     localStorage.setItem('apigee-superdemo-sidebar-collapsed', String(isSidebarCollapsed))
   }, [isSidebarCollapsed])
 
   const activeDemo = demos?.demos.find((d) => d.id === activeDemoId) ?? null
+
+  // Auth gating only applies when auth is enabled (Cloud Run by default).
+  // Local dev skips straight to the app.
+  if (authEnabled) {
+    if (authLoading) {
+      return <div className="app__auth-loading" />
+    }
+    if (!user) {
+      return <LoginScreen onSignIn={() => void signIn()} />
+    }
+    if (accessDenied) {
+      return (
+        <LoginScreen
+          onSignIn={() => void signIn()}
+          denied
+          deniedEmail={user.email ?? undefined}
+          onSignOut={() => void signOut()}
+        />
+      )
+    }
+  }
 
   return (
     <div className="app">
@@ -60,6 +98,8 @@ export function App() {
           onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
           activeDemo={activeDemo}
           onNavigateHome={() => setActiveDemoId(null)}
+          userEmail={authEnabled ? (user?.email ?? undefined) : undefined}
+          onSignOut={authEnabled ? () => void signOut() : undefined}
         />
         <div className="app__content">
           <StatusBanner demos={demos} error={error} />

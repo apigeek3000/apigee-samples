@@ -6,6 +6,8 @@ interface Props {
   onToggleSidebar: () => void
   activeDemo: DemoMetadata | null
   onNavigateHome: () => void
+  userEmail?: string
+  onSignOut?: () => void
 }
 
 export function Topbar({
@@ -13,6 +15,8 @@ export function Topbar({
   onToggleSidebar,
   activeDemo,
   onNavigateHome,
+  userEmail,
+  onSignOut,
 }: Props) {
   return (
     <header className={styles.topbar}>
@@ -63,6 +67,19 @@ export function Topbar({
           </>
         )}
       </div>
+
+      {userEmail && (
+        <div className={styles.account}>
+          <span className={styles.email}>{userEmail}</span>
+          <button
+            type="button"
+            className={styles.signOut}
+            onClick={onSignOut}
+          >
+            Sign out
+          </button>
+        </div>
+      )}
     </header>
   )
 }

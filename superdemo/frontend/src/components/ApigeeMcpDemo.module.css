@@ -3,7 +3,6 @@
   flex-direction: column;
   gap: 16px;
   padding: 16px;
-  height: 100%;
   box-sizing: border-box;
 }
 
@@ -15,15 +14,13 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  flex: 1;
-  min-height: 0;
 }
 
 .toolsPanel {
   background: var(--surface, #1a1a1a);
   border-radius: 8px;
   padding: 12px;
-  max-height: 35%;
+  max-height: 220px;
   overflow-y: auto;
   flex-shrink: 0;
 }
@@ -78,13 +75,19 @@
   background: var(--surface, #1a1a1a);
   border-radius: 8px;
   padding: 12px;
-  flex: 1;
-  min-height: 0;
+  /* Definite height so the message list can scroll internally and the input +
+     suggestions stay pinned at the bottom. The page (.app__content) scrolls
+     when "More info" is expanded, rather than the chat being squeezed — which
+     used to push the input/suggestions down under the More info card. */
+  height: 60vh;
+  min-height: 420px;
 }
 
 .messages {
   flex: 1;
-  min-height: 420px;
+  /* min-height:0 lets the list shrink and scroll instead of overflowing the
+     chat box and shoving the input/suggestions out the bottom. */
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -126,6 +129,7 @@
   display: flex;
   gap: 8px;
   padding-top: 8px;
+  flex-shrink: 0;
 }
 
 .input input {
@@ -156,6 +160,7 @@
   gap: 6px;
   flex-wrap: wrap;
   padding: 6px 0 0 0;
+  flex-shrink: 0;
 }
 
 .suggested button {
