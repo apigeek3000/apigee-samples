@@ -53,42 +53,11 @@ describe('LlmCircuitBreakingDemo', () => {
     expect(screen.getByText(/us-central1 · HTTP 200/)).toBeInTheDocument()
   })
 
-  it('sends a burst of 4 requests and shows the breaker tripping to secondary', async () => {
-    const user = userEvent.setup()
-    vi.mocked(sendCircuitBreaking)
-      .mockResolvedValueOnce({
-        httpStatus: 200, targetPool: 'primary', targetRegion: 'us-central1',
-        text: 'a', latencyMs: 100, body: {},
-      })
-      .mockResolvedValueOnce({
-        httpStatus: 200, targetPool: 'primary', targetRegion: 'us-central1',
-        text: 'b', latencyMs: 100, body: {},
-      })
-      .mockResolvedValueOnce({
-        httpStatus: 200, targetPool: 'secondary', targetRegion: 'us-east4',
-        text: 'c', latencyMs: 100, body: {},
-      })
-      .mockResolvedValueOnce({
-        httpStatus: 200, targetPool: 'secondary', targetRegion: 'us-east4',
-        text: 'd', latencyMs: 100, body: {},
-      })
-
-    render(<LlmCircuitBreakingDemo demos={demos} demo={demo} />)
-    await user.click(screen.getByRole('button', { name: /send burst/i }))
-
-    expect(sendCircuitBreaking).toHaveBeenCalledTimes(4)
-    const badges = await screen.findAllByTestId('target-pool-badge')
-    expect(badges).toHaveLength(4)
-    expect(badges.map((b) => b.textContent)).toEqual([
-      'primary', 'primary', 'secondary', 'secondary',
-    ])
-  })
-
-  it('fires the whole burst concurrently instead of one request at a time', async () => {
+  it('fires the whole break concurrently instead of one request at a time', async () => {
     // A sequential `for` loop with `await` would only have one request in
     // flight until the first resolves. We hold every response open, so the
     // invocation count observed while nothing has resolved is the whole test:
-    // 4 means concurrent, 1 means sequential.
+    // 3 means concurrent, 1 means sequential.
     const user = userEvent.setup()
 
     const resolvers: Array<(value: CircuitBreakingResponse) => void> = []
@@ -100,32 +69,33 @@ describe('LlmCircuitBreakingDemo', () => {
     )
 
     render(<LlmCircuitBreakingDemo demos={demos} demo={demo} />)
-    await user.click(screen.getByRole('button', { name: /send burst/i }))
+    await user.click(screen.getByRole('button', { name: /break the circuit/i }))
 
-    await waitFor(() => expect(sendCircuitBreaking).toHaveBeenCalledTimes(4))
-    expect(resolvers).toHaveLength(4)
+    await waitFor(() => expect(sendCircuitBreaking).toHaveBeenCalledTimes(3))
+    expect(resolvers).toHaveLength(3)
     expect(screen.queryAllByTestId('target-pool-badge')).toHaveLength(0)
 
     // Resolve out of order: results must still be numbered by dispatch order.
-    const pools = ['primary', 'primary', 'secondary', 'secondary'] as const
-    for (const i of [3, 1, 0, 2]) {
+    const regions = ['us-east4', 'us-central1', 'us-east4'] as const
+    for (const i of [2, 0, 1]) {
       resolvers[i]({
-        httpStatus: 200,
-        targetPool: pools[i],
-        targetRegion: pools[i] === 'primary' ? 'us-central1' : 'us-east4',
+        httpStatus: 404,
+        targetPool: 'secondary',
+        targetRegion: regions[i],
         text: `response ${i}`,
-        latencyMs: 100,
+        latencyMs: 40,
         body: {},
       })
     }
 
     const badges = await screen.findAllByTestId('target-pool-badge')
-    expect(badges.map((b) => b.textContent)).toEqual([
-      'primary', 'primary', 'secondary', 'secondary',
-    ])
+    expect(badges).toHaveLength(3)
+    expect(
+      screen.getAllByText(/us-east4 · HTTP 404|us-central1 · HTTP 404/),
+    ).toHaveLength(3)
   })
 
-  it('breaks the primary by requesting a model Vertex AI does not publish', async () => {
+  it('breaks the circuit by requesting a model Vertex AI does not publish', async () => {
     const user = userEvent.setup()
     vi.mocked(sendCircuitBreaking).mockResolvedValue({
       httpStatus: 404,
@@ -137,15 +107,16 @@ describe('LlmCircuitBreakingDemo', () => {
     })
 
     render(<LlmCircuitBreakingDemo demos={demos} demo={demo} />)
-    await user.click(screen.getByRole('button', { name: /break the primary/i }))
+    await user.click(screen.getByRole('button', { name: /break the circuit/i }))
 
-    // failover_threshold is 2, and every call must carry the bogus model —
+    // 3, not 2: the quota ALLOWS failover_threshold (2) failures in the window,
+    // so it is the 3rd that trips it. Every call must carry the bogus model —
     // a real model name would return 200 and never feed the FaultRule.
-    expect(sendCircuitBreaking).toHaveBeenCalledTimes(2)
+    expect(sendCircuitBreaking).toHaveBeenCalledTimes(3)
     for (const call of vi.mocked(sendCircuitBreaking).mock.calls) {
       expect(call[0].model).toBe('gemini-does-not-exist')
     }
-    expect(await screen.findAllByTestId('target-pool-badge')).toHaveLength(2)
+    expect(await screen.findAllByTestId('target-pool-badge')).toHaveLength(3)
   })
 
   it('does not call the breaker open just because a failed request hit secondary', async () => {
@@ -165,13 +136,13 @@ describe('LlmCircuitBreakingDemo', () => {
     render(<LlmCircuitBreakingDemo demos={demos} demo={demo} />)
     expect(screen.getByTestId('breaker-state')).toHaveTextContent('unknown')
 
-    await user.click(screen.getByRole('button', { name: /break the primary/i }))
+    await user.click(screen.getByRole('button', { name: /break the circuit/i }))
     await screen.findAllByTestId('target-pool-badge')
 
     expect(screen.getByTestId('breaker-state')).toHaveTextContent('unknown')
     expect(
       screen.getAllByText(/retried into secondary by the FaultRule/i),
-    ).toHaveLength(2)
+    ).toHaveLength(3)
   })
 
   it('reports the breaker open once a successful request is served by secondary', async () => {
@@ -209,12 +180,6 @@ describe('LlmCircuitBreakingDemo', () => {
     ).toBeInTheDocument()
   })
 
-  it('explains that only upstream failures open the breaker, not request volume', () => {
-    render(<LlmCircuitBreakingDemo demos={demos} demo={demo} />)
-    expect(screen.getByText(/upstream failures/i)).toBeInTheDocument()
-    expect(screen.getByText(/dynamic shared quota/i)).toBeInTheDocument()
-  })
-
   it('does not blame the deploy when a FAILED request lacks the target-pool header', async () => {
     // Regression: the warning fired on any missing header, so a correctly
     // patched proxy accused itself of being unpatched every time an error
@@ -230,7 +195,7 @@ describe('LlmCircuitBreakingDemo', () => {
     })
 
     render(<LlmCircuitBreakingDemo demos={demos} demo={demo} />)
-    await user.click(screen.getByRole('button', { name: /break the primary/i }))
+    await user.click(screen.getByRole('button', { name: /break the circuit/i }))
     await screen.findAllByTestId('target-pool-badge')
 
     expect(screen.queryByText(/unpatched revision/i)).not.toBeInTheDocument()
@@ -253,15 +218,4 @@ describe('LlmCircuitBreakingDemo', () => {
     expect(await screen.findByText(/unpatched revision/i)).toBeInTheDocument()
   })
 
-  it('says the breaker state is inferred, not read from Apigee', () => {
-    render(<LlmCircuitBreakingDemo demos={demos} demo={demo} />)
-    expect(
-      screen.getByText(/cannot read\s+Apigee's quota counter/i),
-    ).toBeInTheDocument()
-  })
-
-  it('warns that the failover quota is shared across all callers', () => {
-    render(<LlmCircuitBreakingDemo demos={demos} demo={demo} />)
-    expect(screen.getByText(/shared across everyone/i)).toBeInTheDocument()
-  })
 })

@@ -259,15 +259,15 @@ export const demoInfo: Record<string, DemoInfo> = {
     diagram: `flowchart LR
   Browser([Browser])
   subgraph Apigee["Apigee Proxy"]
-    Q[Quota<br/>2 per 2 min]
+    Q[Quota<br/>2 failures per 2 min]
     RR{RouteRule}
   end
   P[(Vertex AI<br/>primary region)]
   S[(Vertex AI<br/>secondary region)]
   Browser --> Q --> RR
-  RR -- "under quota" --> P
-  RR -- "quota tripped" --> S
-  P -. "5xx → retry" .-> S`,
+  RR -- "breaker closed" --> P
+  RR -- "breaker open" --> S
+  P -. "4xx/5xx → retry" .-> S`,
     description:
       'The breaker counts upstream failures, not requests. Q-LLM-Failover-Counter is attached only to the primary target’s FaultRule (condition: status 429 or > 399), so it increments solely when Vertex AI rejects a call. Q-LLM-Failover then reads that shared rolling-window counter on every request — once 2 failures land inside 2 minutes it trips, and the RouteRule parks traffic on a secondary Vertex AI region until the window rolls off. Within a single failing request, the FaultRule also retries against the secondary region via a ServiceCallout, so the caller still gets an answer. The proxy records the winning target in a flow variable, and superdemo patches it into x-target-pool / x-target-region response headers so the UI can show which backend actually served each request. Because a healthy primary never feeds the counter, normal traffic stays on primary. The sibling sample’s notebook forces a failover with a Cloud Tasks fan-out meant to exhaust the project’s Gemini quota — but Gemini 2.5 is served under dynamic shared quota, which has no per-project limit to exceed, so that trigger is not deterministic. This UI instead sends requests for a model Vertex AI does not publish: the 404 feeds the same counter a 429 would, and the breaker opens every time. Note the quota has no identifier, so it is shared across every caller of this deployment.',
     policyLinks: [
@@ -280,6 +280,14 @@ export const demoInfo: Record<string, DemoInfo> = {
         label: 'AssignMessage',
         href: `${APIGEE_POLICY_BASE}/assign-message-policy`,
       },
+      {
+        label: 'ExtractVariables',
+        href: `${APIGEE_POLICY_BASE}/extract-variables-policy`,
+      },
+      {
+        label: 'DataCapture',
+        href: `${APIGEE_POLICY_BASE}/data-capture-policy`,
+      },
     ],
     githubHref: `${GITHUB_BASE}/llm-circuit-breaking`,
   },
@@ -289,7 +297,7 @@ export const demoInfo: Record<string, DemoInfo> = {
   Bob([Bob])
   subgraph Apigee["Apigee Proxy"]
     VK[VerifyAPIKey]
-    TQ["LLMTokenQuota<br/>keyed on x-userid"]
+    TQ["Quota<br/>keyed on x-userid"]
   end
   Vertex[(Vertex AI)]
   Alice -- "x-userid: alice" --> VK
@@ -297,7 +305,7 @@ export const demoInfo: Record<string, DemoInfo> = {
   VK --> TQ --> Vertex
   TQ -. "429 when that user's<br/>budget is spent" .-> Alice`,
     description:
-      "Both users present the same API key, so they share an app and a product — but the token quota is keyed on the x-userid header, so each gets an independent budget. Spend Alice's bronze allowance and she gets a 429 while Bob, on the very same key, still gets a 200. The counter is weighted by the response's usageMetadata.totalTokenCount, so cost is measured in tokens rather than requests.",
+      "Both users present the same API key, so they share an app and a product — but the quota is keyed on the x-userid header (Identifier ref=request.header.x-userid), so each gets an independent budget. Spend Alice's bronze allowance and she gets a 429 while Bob, on the very same key, still gets a 200. It is a standard Quota policy of type=flexi, split in two the way Apigee's token-limit samples always are: Q-TokenQuota runs EnforceOnly on the request and just checks the budget, while Q-TokenQuotaCounter runs CountOnly on the response and spends it, with MessageWeight ref=total_token_count. That variable comes from EV-ExtractTokenCounts reading usageMetadata.totalTokenCount out of the Vertex response — so cost is measured in tokens rather than requests, and it can only be charged after the model has answered.",
     policyLinks: [
       {
         label: 'VerifyAPIKey',
@@ -307,6 +315,14 @@ export const demoInfo: Record<string, DemoInfo> = {
       {
         label: 'ExtractVariables',
         href: `${APIGEE_POLICY_BASE}/extract-variables-policy`,
+      },
+      {
+        label: 'AssignMessage',
+        href: `${APIGEE_POLICY_BASE}/assign-message-policy`,
+      },
+      {
+        label: 'DataCapture',
+        href: `${APIGEE_POLICY_BASE}/data-capture-policy`,
       },
     ],
     githubHref: `${GITHUB_BASE}/llm-token-limits-per-user`,

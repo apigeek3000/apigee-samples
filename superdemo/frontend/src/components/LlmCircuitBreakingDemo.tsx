@@ -14,8 +14,12 @@ interface Props {
   demo: DemoMetadata
 }
 
-const BURST_SIZE = 4
 const DEFAULT_PROMPT = 'Why is the sky blue?'
+
+// One more than the failover threshold. The quota ALLOWS 2 failures in the
+// window, so it is the 3rd that trips it — sending exactly 2 leaves the breaker
+// closed.
+const BREAK_REQUESTS = 3
 
 // Vertex AI 404s a model it does not publish, every time, in every region. The
 // primary target's FaultRule counts any status above 399 exactly as it counts a
@@ -145,19 +149,11 @@ export function LlmCircuitBreakingDemo({ demos, demo }: Props) {
           </button>
           <button
             type="button"
-            className={styles.send}
-            disabled={loading || !prompt}
-            onClick={() => send(BURST_SIZE)}
-          >
-            Send burst ({BURST_SIZE})
-          </button>
-          <button
-            type="button"
             className={styles.breakBtn}
             disabled={loading}
-            onClick={() => send(threshold, MISSING_MODEL)}
+            onClick={() => send(BREAK_REQUESTS, MISSING_MODEL)}
           >
-            Break the primary ({threshold})
+            Break the Circuit ({BREAK_REQUESTS})
           </button>
           {attempts.length > 0 && (
             <button
@@ -169,31 +165,6 @@ export function LlmCircuitBreakingDemo({ demos, demo }: Props) {
             </button>
           )}
         </div>
-
-        <p className={styles.caveat}>
-          <strong>Break the primary</strong> sends {threshold} requests for{' '}
-          <code>{MISSING_MODEL}</code>, a model Vertex AI does not publish, so
-          it answers <code>404</code> every time. The FaultRule counts any
-          status above 399 exactly as it counts a <code>429</code>, so this
-          opens the breaker deterministically. Sending more <em>traffic</em>{' '}
-          never would: Gemini 2.5 runs under dynamic shared quota, which has no
-          per-project limit for you to exceed.
-        </p>
-        <p className={styles.caveat}>
-          Watch the two <code>secondary</code> results carefully — they are not
-          the same thing. A <strong>failed</strong> request reaching secondary
-          was retried there by the FaultRule; the breaker may still be closed. A{' '}
-          <strong>successful</strong> request reaching secondary means the
-          breaker is open and the RouteRule is skipping primary altogether.
-        </p>
-        <p className={styles.caveat}>
-          The state above is <strong>inferred</strong> from{' '}
-          <code>x-target-pool</code> response headers — the browser cannot read
-          Apigee&apos;s quota counter. And the failover quota has no identifier,
-          so it is <strong>shared across everyone</strong> calling this
-          deployment: someone else&apos;s failures count towards the same window
-          and can open your breaker.
-        </p>
 
         <ol className={styles.attempts}>
           {attempts.map((a) => (

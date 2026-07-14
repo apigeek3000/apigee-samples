@@ -132,14 +132,6 @@
   white-space: nowrap;
 }
 
-.caveat {
-  margin: 0;
-  font-size: 12px;
-  color: var(--text-dim);
-  border-left: 3px solid var(--border);
-  padding-left: 10px;
-}
-
 .attempts {
   list-style: none;
   margin: 0;
