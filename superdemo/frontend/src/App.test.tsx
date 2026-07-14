@@ -13,6 +13,8 @@ vi.mock('./api', () => ({
   fetchRecentLog: vi.fn(),
   sendThreatRegex: vi.fn(),
   sendThreatJson: vi.fn(),
+  sendCircuitBreaking: vi.fn(),
+  sendPerUserTokenLimits: vi.fn(),
 }))
 
 import { fetchDemos } from './api'

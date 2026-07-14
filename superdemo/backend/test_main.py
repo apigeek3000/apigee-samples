@@ -245,6 +245,8 @@ def test_list_demos_includes_status(fake_config):
         "apigee-mcp": "passing",
         "cloud-logging": "unknown",
         "threat-protection": "unknown",
+        "llm-circuit-breaking": "unknown",
+        "llm-token-limits-per-user": "unknown",
     }
 
 
@@ -462,15 +464,15 @@ def test_proxy_llm_token_limits_missing_adc_returns_500(fake_config, monkeypatch
 PLACEHOLDER_DEMO_IDS = {
     "llm-semantic-cache-v2",
     "llm-routing",
-    "llm-circuit-breaking",
     "llm-logging",
-    "llm-token-limits-per-user",
     "llm-function-calling",
 }
 
 
-def test_list_demos_includes_six_placeholder_demos():
-    """All six placeholder demos appear with status=placeholder and placeholder=True."""
+def test_list_demos_includes_four_placeholder_demos():
+    """All four remaining placeholder demos appear with status=placeholder and
+    placeholder=True. (llm-circuit-breaking and llm-token-limits-per-user were
+    promoted to real demos.)"""
     response = client.get("/api/demos")
     data = response.json()
     by_id = {d["id"]: d for d in data["demos"]}
@@ -653,6 +655,184 @@ def test_proxy_threat_protection_json_blocked(fake_config):
 
     assert response.status_code == 500
     assert response.json() == fault_body
+
+
+def test_list_demos_includes_circuit_breaking(fake_config):
+    """llm-circuit-breaking is a real demo now, not a placeholder."""
+    fake_config["demos"]["llm-circuit-breaking"] = {"status": "passing"}
+    response = client.get("/api/demos")
+    assert response.status_code == 200
+    demos = {d["id"]: d for d in response.json()["demos"]}
+    cb = demos["llm-circuit-breaking"]
+    assert not cb.get("placeholder")
+    assert cb["title"] == "LLM Circuit Breaking"
+    assert cb["status"] == "passing"
+
+
+def test_list_demos_circuit_breaking_enrichment(fake_config):
+    """Secret-sourced failover fields are merged into the demo metadata."""
+    fake_config["demos"]["llm-circuit-breaking"] = {
+        "status": "passing",
+        "primary_region": "us-central1",
+        "secondary_region": "us-east4",
+        "failover_threshold": 2,
+        "window_minutes": 2,
+    }
+    response = client.get("/api/demos")
+    demos = {d["id"]: d for d in response.json()["demos"]}
+    cb = demos["llm-circuit-breaking"]
+    assert cb["primary_region"] == "us-central1"
+    assert cb["secondary_region"] == "us-east4"
+    assert cb["failover_threshold"] == 2
+    assert cb["window_minutes"] == 2
+
+
+def test_proxy_circuit_breaking_sends_bearer_without_api_key(
+    fake_config, fake_bearer_token
+):
+    """No VerifyAPIKey on this proxy, but Vertex needs the caller's bearer token."""
+    target = f"https://{FAKE_HOST}/v1/samples/llm-circuit-breaking/v1/projects/p/locations/r/publishers/google/models/m:generateContent"
+    with respx.mock(assert_all_called=True) as mock:
+        route = mock.route(url__startswith=target).respond(
+            200,
+            json={"candidates": []},
+            headers={"x-target-pool": "secondary", "x-target-region": "us-east4"},
+        )
+        response = client.post(
+            "/api/proxy/llm-circuit-breaking/v1/projects/p/locations/r/publishers/google/models/m:generateContent",
+            json={"contents": []},
+        )
+
+    assert response.status_code == 200
+    captured = route.calls.last.request
+    assert "x-apikey" not in {k.lower() for k in captured.headers}
+    assert captured.headers["authorization"] == f"Bearer {fake_bearer_token}"
+
+
+def test_proxy_circuit_breaking_forwards_target_pool_headers(
+    fake_config, fake_bearer_token
+):
+    """The x-target-pool/x-target-region headers are the demo's whole signal —
+    they must survive back to the browser."""
+    target = f"https://{FAKE_HOST}/v1/samples/llm-circuit-breaking/"
+    with respx.mock(assert_all_called=True) as mock:
+        mock.route(url__startswith=target).respond(
+            200,
+            json={"candidates": []},
+            headers={"x-target-pool": "secondary", "x-target-region": "us-east4"},
+        )
+        response = client.post(
+            "/api/proxy/llm-circuit-breaking/v1/models/m:generateContent",
+            json={"contents": []},
+        )
+
+    assert response.status_code == 200
+    assert response.headers["x-target-pool"] == "secondary"
+    assert response.headers["x-target-region"] == "us-east4"
+
+
+def test_list_demos_includes_per_user_token_limits(fake_config):
+    fake_config["demos"]["llm-token-limits-per-user"] = {"status": "passing"}
+    response = client.get("/api/demos")
+    demos = {d["id"]: d for d in response.json()["demos"]}
+    pu = demos["llm-token-limits-per-user"]
+    assert not pu.get("placeholder")
+    assert pu["title"] == "Per-User Token Limits"
+    assert pu["status"] == "passing"
+
+
+def test_list_demos_per_user_enrichment_hides_keys(fake_config):
+    """Limits are surfaced; the API keys must never reach the browser."""
+    fake_config["demos"]["llm-token-limits-per-user"] = {
+        "status": "passing",
+        "bronze_key": "pu-bronze-003",
+        "silver_key": "pu-silver-004",
+        "bronze_token_limit": 2000,
+        "silver_token_limit": 5000,
+        "interval_minutes": 5,
+        "model": "gemini-fake",
+        "region": "us-central1",
+    }
+    response = client.get("/api/demos")
+    demos = {d["id"]: d for d in response.json()["demos"]}
+    pu = demos["llm-token-limits-per-user"]
+    assert pu["bronze_token_limit"] == 2000
+    assert pu["silver_token_limit"] == 5000
+    assert pu["interval_minutes"] == 5
+    assert "bronze_key" not in pu
+    assert "silver_key" not in pu
+
+
+@pytest.mark.parametrize(
+    "tier,expected_key",
+    [("bronze", "pu-bronze-003"), ("silver", "pu-silver-004")],
+)
+def test_proxy_per_user_injects_tier_key_and_userid(
+    fake_config, fake_bearer_token, tier, expected_key
+):
+    fake_config["demos"]["llm-token-limits-per-user"] = {
+        "bronze_key": "pu-bronze-003",
+        "silver_key": "pu-silver-004",
+        "status": "passing",
+    }
+    target = f"https://{FAKE_HOST}/v1/samples/llm-token-limits-per-user/"
+    with respx.mock(assert_all_called=True) as mock:
+        route = mock.route(url__startswith=target).respond(
+            200, json={"candidates": [], "usageMetadata": {"totalTokenCount": 42}}
+        )
+        response = client.post(
+            "/api/proxy/llm-token-limits-per-user/v1/models/m:generateContent",
+            headers={"x-rate-limit-tier": tier, "x-userid": "alice"},
+            json={"contents": []},
+        )
+
+    assert response.status_code == 200
+    captured = route.calls.last.request
+    assert captured.headers["x-apikey"] == expected_key
+    assert captured.headers["x-userid"] == "alice"
+    assert captured.headers["authorization"] == f"Bearer {fake_bearer_token}"
+
+
+def test_proxy_per_user_defaults_to_bronze(fake_config, fake_bearer_token):
+    """An absent or bogus tier header falls back to bronze."""
+    fake_config["demos"]["llm-token-limits-per-user"] = {
+        "bronze_key": "pu-bronze-003",
+        "silver_key": "pu-silver-004",
+        "status": "passing",
+    }
+    target = f"https://{FAKE_HOST}/v1/samples/llm-token-limits-per-user/"
+    with respx.mock(assert_all_called=True) as mock:
+        route = mock.route(url__startswith=target).respond(200, json={})
+        response = client.post(
+            "/api/proxy/llm-token-limits-per-user/v1/models/m:generateContent",
+            headers={"x-rate-limit-tier": "platinum", "x-userid": "bob"},
+            json={"contents": []},
+        )
+
+    assert response.status_code == 200
+    assert route.calls.last.request.headers["x-apikey"] == "pu-bronze-003"
+
+
+def test_proxy_per_user_429_passes_through(fake_config, fake_bearer_token):
+    """The 429 IS the demo — it must reach the browser, not become a 500."""
+    fake_config["demos"]["llm-token-limits-per-user"] = {
+        "bronze_key": "pu-bronze-003",
+        "silver_key": "pu-silver-004",
+        "status": "passing",
+    }
+    target = f"https://{FAKE_HOST}/v1/samples/llm-token-limits-per-user/"
+    with respx.mock(assert_all_called=True) as mock:
+        mock.route(url__startswith=target).respond(
+            429, json={"fault": {"faultstring": "Rate limit quota violation"}}
+        )
+        response = client.post(
+            "/api/proxy/llm-token-limits-per-user/v1/models/m:generateContent",
+            headers={"x-rate-limit-tier": "bronze", "x-userid": "alice"},
+            json={"contents": []},
+        )
+
+    assert response.status_code == 429
+    assert "fault" in response.json()
 
 
 # ---- /api/cloud-logging/recent ----

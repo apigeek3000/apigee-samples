@@ -1,0 +1,163 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.header h2 {
+  margin: 0 0 4px;
+}
+
+.header p {
+  margin: 0;
+  color: var(--text-dim);
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.panelSubtitle {
+  margin: 12px 0 0;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.tiers {
+  display: flex;
+  gap: 4px;
+}
+
+.tier,
+.tierActive {
+  padding: 6px 14px;
+  border-radius: 6px;
+  text-transform: capitalize;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.tierActive {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.prompt {
+  flex: 1;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 13px;
+}
+
+.panes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+@media (max-width: 720px) {
+  .panes {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.paneHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.paneTitle {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text);
+}
+
+.userId {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.send {
+  align-self: flex-start;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.responseCard {
+  margin: 0;
+  padding: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text);
+  white-space: pre-wrap;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.badgeAllowed,
+.badgeBlocked {
+  align-self: flex-start;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.badgeAllowed {
+  background: rgba(34, 197, 94, 0.18);
+  color: #4ade80;
+}
+
+.badgeBlocked {
+  background: rgba(239, 68, 68, 0.18);
+  color: #f87171;
+}
+
+.caveat {
+  margin: 16px 0 0;
+  font-size: 12px;
+  color: var(--text-dim);
+  border-left: 3px solid var(--border);
+  padding-left: 10px;
+}

@@ -27,6 +27,18 @@ elif [ -n "$PROJECT" ] && [ -z "$PROJECT_ID" ]; then
   export PROJECT_ID="$PROJECT"
 fi
 
+# undeploy-llm-circuit-breaking.sh exits early (printing "No <VAR> variable set")
+# unless it sees the same P1/P2 pair deploy-superdemo.sh maps for it. Because every
+# sibling clean-up call below is `|| true`, that early exit would be silent — the
+# proxy, its product/app, and the Cloud Tasks queue would survive a "successful"
+# teardown. Map the vars here too, with the same us-east1 default as the deploy side.
+export SECONDARY_REGION="${SECONDARY_REGION:-us-east1}"
+export APIGEE_PROJECT="$PROJECT"
+export PROJECT_P1="$PROJECT"
+export PROJECT_P2="$PROJECT"
+export REGION_P1="$REGION"
+export REGION_P2="$SECONDARY_REGION"
+
 # ====================================================================
 # Clean basic-quota
 # ====================================================================
@@ -130,6 +142,28 @@ echo "============================================="
 if [ -f "$rootdir/threat-protection/clean-up-threat-protection.sh" ]; then
   cd "$rootdir/threat-protection"
   ./clean-up-threat-protection.sh || true
+fi
+
+# ====================================================================
+# Clean llm-circuit-breaking
+# ====================================================================
+echo "============================================="
+echo " Cleaning LLM Circuit Breaking"
+echo "============================================="
+if [ -f "$rootdir/llm-circuit-breaking/undeploy-llm-circuit-breaking.sh" ]; then
+  cd "$rootdir/llm-circuit-breaking"
+  ./undeploy-llm-circuit-breaking.sh || true
+fi
+
+# ====================================================================
+# Clean llm-token-limits-per-user
+# ====================================================================
+echo "============================================="
+echo " Cleaning Per-User Token Limits"
+echo "============================================="
+if [ -f "$rootdir/llm-token-limits-per-user/undeploy-llm-token-limits-per-user.sh" ]; then
+  cd "$rootdir/llm-token-limits-per-user"
+  ./undeploy-llm-token-limits-per-user.sh || true
 fi
 
 # ====================================================================

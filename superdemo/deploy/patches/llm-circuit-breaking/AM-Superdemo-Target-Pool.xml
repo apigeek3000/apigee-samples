@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+ Copyright 2026 Google LLC
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+      http://www.apache.org/licenses/LICENSE-2.0
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+<!--
+ Superdemo-owned. Injected into a TEMP COPY of llm-circuit-breaking's bundle at
+ deploy time (see patch_circuit_breaking_bundle in superdemo/deploy/lib.sh); the
+ sibling sample is never modified on disk.
+
+ The sibling proxy records which target pool served a request into the
+ target_pool flow variable, but only forwards it to analytics via DC-Collect.
+ The superdemo UI needs it in the HTTP response, so this copies it into headers.
+
+ continueOnError="true": if the variables are somehow unresolved, the demo
+ response must still reach the browser intact.
+
+ This variant handles the NORMAL response flow only (the DC-Collect anchor in
+ proxies/default.xml's PostFlow). The FaultRule retry path in targets/primary.xml
+ returns the `error` message rather than `response`, so it gets the twin policy
+ AM-Superdemo-Target-Pool-Error instead — see that file for why.
+-->
+<AssignMessage continueOnError="true" enabled="true" name="AM-Superdemo-Target-Pool">
+  <DisplayName>AM-Superdemo-Target-Pool</DisplayName>
+  <Properties/>
+  <Set>
+    <Headers>
+      <Header name="x-target-pool">{target_pool}</Header>
+      <Header name="x-target-region">{balanced_target_region}</Header>
+    </Headers>
+  </Set>
+  <AssignTo createNew="false" type="response"/>
+  <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
+</AssignMessage>

@@ -1,5 +1,6 @@
 import type {
   ApiError,
+  CircuitBreakingResponse,
   CloudLoggingResponse,
   CloudLogEntry,
   DemoMetadata,
@@ -7,11 +8,14 @@ import type {
   DemosResponse,
   McpChatEvent,
   McpTool,
+  PerUserId,
+  PerUserResponse,
   QuotaResponse,
   QuotaTier,
   RateLimitResponse,
   RateLimitTier,
   RecentLogResponse,
+  TargetPool,
   ThreatResponse,
   VertexContent,
 } from './types'
@@ -80,6 +84,10 @@ function normalizeDemo(raw: unknown): DemoMetadata {
     proxy_name: d.proxy_name,
     max_json_object_keys: d.max_json_object_keys,
     blocked_keywords: d.blocked_keywords,
+    primary_region: d.primary_region,
+    secondary_region: d.secondary_region,
+    failover_threshold: d.failover_threshold,
+    window_minutes: d.window_minutes,
   }
 }
 
@@ -394,5 +402,103 @@ export async function sendThreatJson(body: object): Promise<ThreatResponse> {
     body: respBody,
     blocked: response.status !== 200,
     policy: 'json',
+  }
+}
+
+// ── LLM Circuit Breaking demo ────────────────────────────────────────
+
+interface CircuitBreakingRequest {
+  prompt: string
+  projectId: string
+  region: string
+  model: string
+}
+
+function normalizeTargetPool(raw: string | null): TargetPool {
+  if (raw === 'primary' || raw === 'secondary') return raw
+  // The header is added by superdemo's deploy-time patch. If it's missing, the
+  // proxy is running an unpatched revision — surface that rather than guessing.
+  return 'unknown'
+}
+
+export async function sendCircuitBreaking(
+  req: CircuitBreakingRequest,
+): Promise<CircuitBreakingResponse> {
+  const path = `v1/projects/${req.projectId}/locations/${req.region}/publishers/google/models/${req.model}:generateContent`
+  const startedAt = performance.now()
+  const response = await authedFetch(`${PROXY_PREFIX}/llm-circuit-breaking/${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts: [{ text: req.prompt }] }],
+    }),
+  })
+  const latencyMs = Math.round(performance.now() - startedAt)
+
+  const text = await response.text()
+  let body: unknown
+  try {
+    body = text ? JSON.parse(text) : null
+  } catch {
+    body = text
+  }
+
+  const targetRegion = response.headers.get('x-target-region') ?? undefined
+  return {
+    httpStatus: response.status,
+    targetPool: normalizeTargetPool(response.headers.get('x-target-pool')),
+    targetRegion,
+    text: parseRateLimitResponse(body).text,
+    latencyMs,
+    body,
+  }
+}
+
+// ── Per-User Token Limits demo ───────────────────────────────────────
+
+interface PerUserRequest {
+  tier: RateLimitTier
+  userId: PerUserId
+  prompt: string
+  projectId: string
+  region: string
+  model: string
+}
+
+export async function sendPerUserTokenLimits(
+  req: PerUserRequest,
+): Promise<PerUserResponse> {
+  const path = `v1/projects/${req.projectId}/locations/${req.region}/publishers/google/models/${req.model}:generateContent`
+  const response = await authedFetch(
+    `${PROXY_PREFIX}/llm-token-limits-per-user/${path}`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-rate-limit-tier': req.tier,
+        'x-userid': req.userId,
+      },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: req.prompt }] }],
+      }),
+    },
+  )
+
+  const text = await response.text()
+  let body: unknown
+  try {
+    body = text ? JSON.parse(text) : null
+  } catch {
+    body = text
+  }
+
+  // Do NOT throw on 429 — the 429 IS the demo (that user's token budget is spent).
+  const parsed = parseRateLimitResponse(body)
+  return {
+    httpStatus: response.status,
+    quotaExceeded: response.status === 429,
+    text: parsed.text,
+    totalTokens: parsed.totalTokens,
+    body,
   }
 }

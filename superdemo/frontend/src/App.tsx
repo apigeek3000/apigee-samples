@@ -12,6 +12,8 @@ import { PlaceholderDemo } from './components/PlaceholderDemo'
 import { ApigeeMcpDemo } from './components/ApigeeMcpDemo'
 import { CloudLoggingDemo } from './components/CloudLoggingDemo'
 import { ThreatProtectionDemo } from './components/ThreatProtectionDemo'
+import { LlmCircuitBreakingDemo } from './components/LlmCircuitBreakingDemo'
+import { LlmTokenLimitsPerUserDemo } from './components/LlmTokenLimitsPerUserDemo'
 import { EmptyState } from './components/EmptyState'
 import { LoginScreen } from './components/LoginScreen'
 import { useShowStatus } from './hooks/useShowStatus'
@@ -130,6 +132,14 @@ export function App() {
           {!activeDemo?.placeholder && activeDemo?.id === 'threat-protection' && (
             <ThreatProtectionDemo demo={activeDemo} projectId={demos?.project_id} />
           )}
+          {!activeDemo?.placeholder && activeDemo?.id === 'llm-circuit-breaking' && demos && (
+            <LlmCircuitBreakingDemo demos={demos} demo={activeDemo} />
+          )}
+          {!activeDemo?.placeholder &&
+            activeDemo?.id === 'llm-token-limits-per-user' &&
+            demos && (
+              <LlmTokenLimitsPerUserDemo demos={demos} demo={activeDemo} />
+            )}
         </div>
       </main>
     </div>

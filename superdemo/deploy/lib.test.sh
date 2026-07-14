@@ -49,6 +49,11 @@ echo "build_secret_payload: writes nested-shape superdemo-config JSON"
   export MCP_STATUS="passing"
   export CLOUD_LOGGING_STATUS="passing"
   export THREAT_PROTECTION_STATUS="failing"
+  export SECONDARY_REGION="us-east4"
+  export CIRCUIT_BREAKING_STATUS="passing"
+  export PER_USER_BRONZE_KEY="pu-bronze-003"
+  export PER_USER_SILVER_KEY="pu-silver-004"
+  export PER_USER_STATUS="passing"
 
   tmpfile=$(mktemp /tmp/superdemo-payload.XXXXXX.json)
   build_secret_payload "$tmpfile"
@@ -98,6 +103,24 @@ echo "build_secret_payload: writes nested-shape superdemo-config JSON"
       "status": "failing",
       "max_json_object_keys": 5,
       "blocked_keywords": ["delete","exec","drop table","insert","shutdown","update","or"]
+    },
+    "llm-circuit-breaking": {
+      "status": "passing",
+      "primary_region": "us-east1",
+      "secondary_region": "us-east4",
+      "failover_threshold": 2,
+      "window_minutes": 2,
+      "model": "gemini-fake"
+    },
+    "llm-token-limits-per-user": {
+      "bronze_key": "pu-bronze-003",
+      "silver_key": "pu-silver-004",
+      "status": "passing",
+      "bronze_token_limit": 2000,
+      "silver_token_limit": 5000,
+      "interval_minutes": 5,
+      "model": "gemini-fake",
+      "region": "us-east1"
     }
   }
 }
@@ -105,7 +128,7 @@ JSON
 )
 
   if [[ "$actual" == "$expected" ]]; then
-    echo "PASS:   demos.{basic-quota,llm-security,llm-token-limits-v2,apigee-mcp,cloud-logging,threat-protection} populated"
+    echo "PASS:   demos.{basic-quota,llm-security,llm-token-limits-v2,apigee-mcp,cloud-logging,threat-protection,llm-circuit-breaking,llm-token-limits-per-user} populated"
   else
     echo "FAIL:   payload mismatch — diff:"
     diff <(echo "$expected") <(echo "$actual") || true
@@ -327,6 +350,333 @@ STUB
     echo "FAIL:   expected eventual success"
     exit 1
   fi
+) || fail=1
+
+echo
+echo "inject_target_pool_step: inserts a Step after each DC-Collect step"
+(
+  fixture=$(mktemp /tmp/superdemo-inject.XXXXXX.xml)
+  cat > "$fixture" <<'XML'
+<ProxyEndpoint name="default">
+  <PostFlow name="PostFlow">
+    <Response>
+      <Step>
+        <Name>DC-Collect</Name>
+      </Step>
+    </Response>
+  </PostFlow>
+</ProxyEndpoint>
+XML
+
+  count=$(inject_target_pool_step "$fixture" AM-Superdemo-Target-Pool)
+  body=$(cat "$fixture")
+  rm -f "$fixture"
+
+  if [[ "$count" != "1" ]]; then
+    echo "FAIL:   expected 1 insertion, got '$count'"
+    exit 1
+  fi
+  if ! grep -q '<Name>AM-Superdemo-Target-Pool</Name>' <<<"$body"; then
+    echo "FAIL:   injected step not present in output"
+    exit 1
+  fi
+  # The injected step must come AFTER the DC-Collect step, not before it.
+  dc_line=$(grep -n '<Name>DC-Collect</Name>' <<<"$body" | cut -d: -f1)
+  inj_line=$(grep -n '<Name>AM-Superdemo-Target-Pool</Name>' <<<"$body" | cut -d: -f1)
+  if (( inj_line <= dc_line )); then
+    echo "FAIL:   injected step (line $inj_line) is not after DC-Collect (line $dc_line)"
+    exit 1
+  fi
+  echo "PASS:   one Step injected after DC-Collect, in order"
+) || fail=1
+
+echo
+echo "inject_target_pool_step: reports 0 insertions when no DC-Collect anchor exists"
+(
+  fixture=$(mktemp /tmp/superdemo-inject.XXXXXX.xml)
+  cat > "$fixture" <<'XML'
+<ProxyEndpoint name="default">
+  <PostFlow name="PostFlow">
+    <Response/>
+  </PostFlow>
+</ProxyEndpoint>
+XML
+
+  count=$(inject_target_pool_step "$fixture" AM-Superdemo-Target-Pool)
+  rm -f "$fixture"
+
+  if [[ "$count" != "0" ]]; then
+    echo "FAIL:   expected 0 insertions, got '$count'"
+    exit 1
+  fi
+  echo "PASS:   no anchor → 0 insertions"
+) || fail=1
+
+echo
+echo "inject_target_pool_step: places the injection right after a single-line <Step><Name>DC-Collect</Name></Step>"
+(
+  # Mirrors the shape of targets/primary.xml: a FaultRule whose DC-Collect step
+  # has collapsed onto one line, followed (much later) by an unrelated PreFlow
+  # step. The buggy awk's `next` on the same-line match skips the same-line
+  # </Step> check, leaving `pending` set until the NEXT </Step> anywhere in the
+  # file — which here is the unrelated PreFlow step, not DC-Collect.
+  fixture=$(mktemp /tmp/superdemo-inject.XXXXXX.xml)
+  cat > "$fixture" <<'XML'
+<TargetEndpoint name="primary">
+  <FaultRules>
+    <FaultRule name="LLMQuota">
+      <Step>
+        <Name>Q-LLM-Failover-Counter</Name>
+      </Step>
+      <Step><Name>DC-Collect</Name></Step>
+    </FaultRule>
+  </FaultRules>
+  <PreFlow name="PreFlow">
+    <Request>
+      <Step>
+        <Name>AM-Path-Suffix</Name>
+      </Step>
+    </Request>
+  </PreFlow>
+</TargetEndpoint>
+XML
+
+  count=$(inject_target_pool_step "$fixture" AM-Superdemo-Target-Pool-Error)
+  body=$(cat "$fixture")
+  rm -f "$fixture"
+
+  if [[ "$count" != "1" ]]; then
+    echo "FAIL:   expected 1 insertion, got '$count'"
+    exit 1
+  fi
+
+  dc_line=$(grep -n '<Name>DC-Collect</Name>' <<<"$body" | cut -d: -f1)
+  inj_line=$(grep -n '<Name>AM-Superdemo-Target-Pool-Error</Name>' <<<"$body" | cut -d: -f1)
+
+  # Correctly placed, the injected <Step>/<Name>/</Step> block starts on the
+  # very next line after the single-line DC-Collect step, so the injected
+  # <Name> lands 2 lines later. If it instead landed after the unrelated
+  # PreFlow step's </Step>, inj_line would be many lines further down.
+  if (( inj_line - dc_line != 2 )); then
+    echo "FAIL:   injected step not placed immediately after single-line DC-Collect (dc_line=$dc_line inj_line=$inj_line)"
+    exit 1
+  fi
+  # And it must land inside the FaultRule, before the unrelated PreFlow step.
+  preflow_line=$(grep -n '<PreFlow name="PreFlow">' <<<"$body" | cut -d: -f1)
+  if (( inj_line >= preflow_line )); then
+    echo "FAIL:   injected step leaked past the FaultRule into the PreFlow (inj_line=$inj_line preflow_line=$preflow_line)"
+    exit 1
+  fi
+  echo "PASS:   single-line DC-Collect step patched in place, not attached to a later unrelated </Step>"
+) || fail=1
+
+echo
+echo "patch_circuit_breaking_bundle: fails when only ONE of the two files has an anchor (per-file guard)"
+(
+  sibling_dir=$(mktemp -d /tmp/superdemo-sibling.XXXXXX)
+  mkdir -p "$sibling_dir/apiproxy/policies" \
+           "$sibling_dir/apiproxy/proxies" \
+           "$sibling_dir/apiproxy/targets"
+
+  # default.xml: TWO DC-Collect anchors (simulates the sum-based guard being
+  # fooled by both anchors landing in the same file).
+  cat > "$sibling_dir/apiproxy/proxies/default.xml" <<'XML'
+<ProxyEndpoint name="default">
+  <PostFlow name="PostFlow">
+    <Response>
+      <Step>
+        <Name>DC-Collect</Name>
+      </Step>
+      <Step>
+        <Name>DC-Collect</Name>
+      </Step>
+    </Response>
+  </PostFlow>
+</ProxyEndpoint>
+XML
+
+  # primary.xml: NO DC-Collect anchor at all — the retry path would ship unpatched.
+  cat > "$sibling_dir/apiproxy/targets/primary.xml" <<'XML'
+<TargetEndpoint name="primary">
+  <FaultRules>
+    <FaultRule name="LLMQuota">
+      <Step>
+        <Name>Q-LLM-Failover-Counter</Name>
+      </Step>
+    </FaultRule>
+  </FaultRules>
+</TargetEndpoint>
+XML
+
+  export PROJECT="test-project"
+  export REGION="us-central1"
+  export SECONDARY_REGION="us-east4"
+
+  out=$(patch_circuit_breaking_bundle "$sibling_dir" 2>/tmp/superdemo-patch-stderr.$$)
+  rc=$?
+  stderr=$(cat "/tmp/superdemo-patch-stderr.$$")
+  rm -f "/tmp/superdemo-patch-stderr.$$"
+  rm -rf "$sibling_dir"
+
+  if (( rc == 0 )); then
+    echo "FAIL:   expected non-zero return when one file has 0 anchors (sum-based guard passed with total=2)"
+    [[ -n "$out" ]] && rm -rf "$out"
+    exit 1
+  fi
+  if [[ -n "$out" ]]; then
+    echo "FAIL:   expected nothing on stdout, got '$out'"
+    exit 1
+  fi
+  if [[ "$stderr" != *"primary.xml"* ]]; then
+    echo "FAIL:   expected stderr to name the offending file (primary.xml), got: $stderr"
+    exit 1
+  fi
+  echo "PASS:   per-file guard fails loudly naming the unpatched file, even though total insertions >= 2"
+) || fail=1
+
+echo
+echo "patch_circuit_breaking_bundle: fault path gets the -Error variant, response path does not"
+(
+  # The bug this pins: a FaultRule returns the `error` message, not `response`.
+  # Injecting the plain (response-targeting) policy on the retry path sets the
+  # headers on a message nobody sends, so the browser sees no x-target-pool and
+  # the UI shows "unknown" for every failing request.
+  sibling_dir=$(mktemp -d /tmp/superdemo-sibling.XXXXXX)
+  mkdir -p "$sibling_dir/apiproxy/policies" \
+           "$sibling_dir/apiproxy/proxies" \
+           "$sibling_dir/apiproxy/targets"
+
+  cat > "$sibling_dir/apiproxy/proxies/default.xml" <<'XML'
+<ProxyEndpoint name="default">
+  <PostFlow name="PostFlow">
+    <Response>
+      <Step>
+        <Name>DC-Collect</Name>
+      </Step>
+    </Response>
+  </PostFlow>
+</ProxyEndpoint>
+XML
+
+  cat > "$sibling_dir/apiproxy/targets/primary.xml" <<'XML'
+<TargetEndpoint name="primary">
+  <FaultRules>
+    <FaultRule name="LLMQuota">
+      <Step>
+        <Name>DC-Collect</Name>
+      </Step>
+    </FaultRule>
+  </FaultRules>
+</TargetEndpoint>
+XML
+
+  export PROJECT="test-project"
+  export REGION="us-central1"
+  export SECONDARY_REGION="us-east4"
+
+  work_dir=$(patch_circuit_breaking_bundle "$sibling_dir")
+  rc=$?
+  rm -rf "$sibling_dir"
+
+  if (( rc != 0 )) || [[ -z "$work_dir" ]]; then
+    echo "FAIL:   patch_circuit_breaking_bundle returned $rc"
+    exit 1
+  fi
+
+  proxy_xml=$(cat "$work_dir/apiproxy/proxies/default.xml")
+  target_xml=$(cat "$work_dir/apiproxy/targets/primary.xml")
+  err_policy=$(cat "$work_dir/apiproxy/policies/AM-Superdemo-Target-Pool-Error.xml" 2>/dev/null || true)
+
+  # The FaultRule anchor must get the -Error variant...
+  if ! grep -q '<Name>AM-Superdemo-Target-Pool-Error</Name>' <<<"$target_xml"; then
+    echo "FAIL:   primary.xml's FaultRule did not get the -Error variant"
+    rm -rf "$work_dir"
+    exit 1
+  fi
+  # ...and the response-flow anchor must NOT (it would write to the wrong message).
+  if grep -q '<Name>AM-Superdemo-Target-Pool-Error</Name>' <<<"$proxy_xml"; then
+    echo "FAIL:   default.xml's response PostFlow got the -Error variant"
+    rm -rf "$work_dir"
+    exit 1
+  fi
+  if ! grep -q '<Name>AM-Superdemo-Target-Pool</Name>' <<<"$proxy_xml"; then
+    echo "FAIL:   default.xml did not get the response-flow variant"
+    rm -rf "$work_dir"
+    exit 1
+  fi
+  # And the -Error policy must actually target the `error` message. Without this,
+  # the variant is just a rename and the headers still go nowhere.
+  if ! grep -q '<AssignTo[^>]*>error</AssignTo>' <<<"$err_policy"; then
+    echo "FAIL:   AM-Superdemo-Target-Pool-Error does not AssignTo the 'error' message"
+    rm -rf "$work_dir"
+    exit 1
+  fi
+
+  rm -rf "$work_dir"
+  echo "PASS:   fault path patched with the error-targeting policy, response path with the plain one"
+) || fail=1
+
+echo
+echo "ai_product_set_model / ai_product_all_models_are: rebind an AI product's model"
+(
+  # Shape mirrors a real GET on ai-product-bronze-v2, trimmed to what we touch.
+  ai_product_json='{
+    "name": "ai-product-bronze-v2",
+    "createdAt": "1779913831455",
+    "lastModifiedAt": "1779913831455",
+    "llmOperationGroup": {
+      "operationConfigs": [
+        {
+          "apiSource": "llm-token-limits-v2",
+          "llmOperations": [
+            { "resource": "/", "methods": ["POST"], "model": "gemini-2.5-flash" }
+          ],
+          "llmTokenQuota": { "limit": "2000", "interval": "5", "timeUnit": "minute" }
+        }
+      ]
+    }
+  }'
+  patched=$(ai_product_set_model "$ai_product_json" "gemini-2.5-flash-lite")
+
+  assert_equal "gemini-2.5-flash-lite" \
+    "$(jq -r '.llmOperationGroup.operationConfigs[0].llmOperations[0].model' <<<"$patched")" \
+    "  rewrites llmOperations[].model"
+  assert_equal "2000" \
+    "$(jq -r '.llmOperationGroup.operationConfigs[0].llmTokenQuota.limit' <<<"$patched")" \
+    "  leaves the token quota intact"
+  assert_equal "null" "$(jq -r '.createdAt' <<<"$patched")" \
+    "  strips server-owned createdAt so the result can be PUT back"
+
+  if ai_product_all_models_are "$patched" "gemini-2.5-flash-lite"; then
+    echo "PASS:   all-models predicate accepts a fully-rebound product"
+  else
+    echo "FAIL:   all-models predicate rejected a fully-rebound product"
+    fail=1
+  fi
+  if ai_product_all_models_are "$ai_product_json" "gemini-2.5-flash-lite"; then
+    echo "FAIL:   all-models predicate accepted a product still on the old model"
+    fail=1
+  else
+    echo "PASS:   all-models predicate rejects a product still on the old model"
+  fi
+
+  # An Apigee error body has no llmOperations. It must NOT vacuously pass, or a failed
+  # update would be reported as a successful patch.
+  if ai_product_all_models_are '{"error":{"message":"permission denied"}}' "gemini-2.5-flash-lite"; then
+    echo "FAIL:   all-models predicate vacuously accepted an API error body"
+    fail=1
+  else
+    echo "PASS:   all-models predicate rejects an API error body (no operations)"
+  fi
+
+  # A non-AI product (plain operationGroup) must fail loudly rather than be "patched".
+  if ai_product_set_model '{"name":"p","operationGroup":{"operationConfigs":[]}}' "m" >/dev/null 2>&1; then
+    echo "FAIL:   expected non-zero return when the product has no llmOperationGroup"
+    fail=1
+  else
+    echo "PASS:   fails loudly on a non-AI product (no llmOperationGroup)"
+  fi
+  exit $fail
 ) || fail=1
 
 if (( fail != 0 )); then

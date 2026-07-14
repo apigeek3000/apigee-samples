@@ -39,6 +39,19 @@ fi
 
 check_shell_variables PROJECT APIGEE_ENV APIGEE_HOST REGION
 
+# llm-circuit-breaking fails over to a second Vertex backend. superdemo uses one
+# project and two regions, so only the secondary region is configurable; it is
+# optional and defaults to us-east1.
+export SECONDARY_REGION="${SECONDARY_REGION:-us-east1}"
+
+# The sibling llm-circuit-breaking deploy script expects P1/P2 project+region pairs
+# and reads the org from APIGEE_PROJECT. Map superdemo's vars onto them.
+export APIGEE_PROJECT="$PROJECT"
+export PROJECT_P1="$PROJECT"
+export PROJECT_P2="$PROJECT"
+export REGION_P1="$REGION"
+export REGION_P2="$SECONDARY_REGION"
+
 # llm-security-v2 also requires these:
 check_shell_variables PROJECT_ID SERVICE_ACCOUNT_NAME MODEL_NAME MODEL_ARMOR_REGION MODEL_ARMOR_TEMPLATE_ID
 
@@ -64,6 +77,7 @@ if ! gcloud services enable \
       modelarmor.googleapis.com \
       run.googleapis.com \
       apihub.googleapis.com \
+      cloudtasks.googleapis.com \
       --project="$PROJECT"; then
   api_enable_status="failed"
   overall_failed=1
@@ -120,6 +134,8 @@ demo_labels=(
   "apigee-mcp"
   "cloud-logging"
   "threat-protection"
+  "llm-circuit-breaking"
+  "llm-token-limits-per-user"
 )
 demo_proxy_names=(
   "basic-quota"
@@ -128,6 +144,8 @@ demo_proxy_names=(
   "crm-mcp-proxy"
   "sample-cloud-logging"
   "threat-protection"
+  "llm-circuit-breaking-v1"
+  "llm-token-limits-per-user-v1"
 )
 demo_deploy_dirs=(
   "$rootdir/basic-quota"
@@ -136,6 +154,8 @@ demo_deploy_dirs=(
   "$rootdir/apigee-mcp"
   "$rootdir/cloud-logging"
   "$rootdir/threat-protection"
+  "$rootdir/llm-circuit-breaking"
+  "$rootdir/llm-token-limits-per-user"
 )
 demo_deploy_cmds=(
   "./deploy-basic-quota.sh"
@@ -144,6 +164,8 @@ demo_deploy_cmds=(
   "./deploy-all.sh"
   "./deploy-cloud-logging.sh"
   "./deploy-threat-protection.sh"
+  "./deploy-llm-circuit-breaking.sh"
+  "./deploy-llm-token-limits-per-user.sh"
 )
 
 # Result accumulators, populated by the loop.
@@ -159,6 +181,8 @@ LLM_TOKEN_LIMITS_SILVER_KEY=""
 MCP_ENDPOINT=""
 MCP_CLIENT_ID=""
 MCP_CLIENT_SECRET=""
+PER_USER_BRONZE_KEY=""
+PER_USER_SILVER_KEY=""
 
 # fetch_app_key <app_name> -> echoes the consumer key or empty string
 fetch_app_key() {
@@ -211,7 +235,16 @@ fetch_keys_for_demo() {
       MCP_ENDPOINT="https://${APIGEE_HOST}/crm-mcp-proxy/sse"
       demo_smoke_key="$MCP_CLIENT_ID"
       ;;
-    cloud-logging|threat-protection)
+    llm-token-limits-per-user)
+      # The sibling creates one app with two credentials, each bound to a
+      # different AI product.
+      PER_USER_BRONZE_KEY=$(fetch_app_key_for_product \
+        "ai-consumer-app-per-user" "ai-product-bronze-per-user")
+      PER_USER_SILVER_KEY=$(fetch_app_key_for_product \
+        "ai-consumer-app-per-user" "ai-product-silver-per-user")
+      demo_smoke_key="$PER_USER_BRONZE_KEY"
+      ;;
+    cloud-logging|threat-protection|llm-circuit-breaking)
       # These demos' sibling proxies are unsecured (no VerifyAPIKey), so no
       # consumer key fetch is needed. Use a non-empty sentinel so the empty
       # check downstream still treats this as "we have what we need".
@@ -293,6 +326,28 @@ run_smoke_test() {
       code=$(smoke_test_proxy "$label" GET "$url")
       curl_ok=$?
       ;;
+    llm-circuit-breaking)
+      url="https://$APIGEE_HOST/v1/samples/llm-circuit-breaking/v1/projects/$PROJECT/locations/$REGION/publishers/google/models/$MODEL_NAME:generateContent"
+      body='{"contents":[{"role":"user","parts":[{"text":"ping"}]}]}'
+      # No VerifyAPIKey on this proxy, but its targets have no <GoogleAccessToken>,
+      # so Vertex expects the caller to attach the OAuth bearer token.
+      code=$(smoke_test_proxy "$label" POST "$url" \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+              -d "$body")
+      curl_ok=$?
+      ;;
+    llm-token-limits-per-user)
+      url="https://$APIGEE_HOST/v1/samples/llm-token-limits-per-user/v1/projects/$PROJECT/locations/$REGION/publishers/google/models/$MODEL_NAME:generateContent"
+      body='{"contents":[{"role":"user","parts":[{"text":"ping"}]}]}'
+      code=$(smoke_test_proxy "$label" POST "$url" \
+              -H "Content-Type: application/json" \
+              -H "x-apikey: $smoke_key" \
+              -H "x-userid: superdemo-smoke" \
+              -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+              -d "$body")
+      curl_ok=$?
+      ;;
     *)
       echo "test-error (unknown demo)"
       return
@@ -342,6 +397,62 @@ for i in "${!demo_labels[@]}"; do
   fi
   demo_deploy_status+=("$deploy_status")
 
+  # llm-circuit-breaking's proxy records which target pool served a request only
+  # into analytics vars, never into the response — so the UI would have nothing to
+  # show. Redeploy a patched revision that also sets x-target-pool/x-target-region
+  # response headers. The patch is applied to a temp copy; the sibling sample on
+  # disk is never touched.
+  if [[ "$label" == "llm-circuit-breaking" && "$deploy_status" != "deploy-failed" ]]; then
+    echo "  Patching $label to expose the target pool in response headers..."
+    if cb_work_dir=$(patch_circuit_breaking_bundle "$deploy_dir"); then
+      cb_rev=$(apigeecli apis create bundle -f "$cb_work_dir/apiproxy" \
+                 -n llm-circuit-breaking-v1 --org "$PROJECT" --token "$TOKEN" \
+                 --disable-check | jq -r '.revision')
+      if [[ -n "$cb_rev" && "$cb_rev" != "null" ]] && \
+         apigeecli apis deploy --wait --name llm-circuit-breaking-v1 --ovr \
+           --rev "$cb_rev" --org "$PROJECT" --env "$APIGEE_ENV" --token "$TOKEN"; then
+        echo "  Patched revision $cb_rev deployed."
+      else
+        echo "  WARN: patched revision failed to deploy; the demo will show no failover signal."
+        deploy_status="deploy-failed"
+        demo_deploy_status[$i]="$deploy_status"
+        overall_failed=1
+      fi
+      rm -rf "$cb_work_dir"
+    else
+      echo "  WARN: bundle patch failed; the demo will show no failover signal."
+      deploy_status="deploy-failed"
+      demo_deploy_status[$i]="$deploy_status"
+      overall_failed=1
+    fi
+  fi
+
+  # llm-token-limits-v2's AI products hardcode gemini-2.5-flash in the sibling's
+  # aiproduct-*.json, and an AI product's operation match includes the model — so with
+  # any other MODEL_NAME every call is rejected as "no apiproduct match found" even
+  # though the key is valid. Rebind the deployed products to MODEL_NAME. The sibling
+  # sample on disk is never touched.
+  if [[ "$label" == "llm-token-limits-v2" && "$deploy_status" != "deploy-failed" ]]; then
+    ltl_patched=0
+    for ltl_product in ai-product-bronze-v2 ai-product-silver-v2; do
+      if ltl_result=$(patch_ai_product_model "$ltl_product" "$MODEL_NAME"); then
+        if [[ "$ltl_result" == "patched" ]]; then
+          echo "  Rebound $ltl_product to $MODEL_NAME."
+          ltl_patched=1
+        fi
+      else
+        echo "  WARN: could not rebind $ltl_product to $MODEL_NAME; the demo will reject every call."
+        overall_failed=1
+      fi
+    done
+    # Apigee caches key→product resolution, so a smoke test fired immediately after
+    # the rebind can still see the old model binding. Only wait when we actually wrote.
+    if (( ltl_patched == 1 )); then
+      echo "  Waiting 15s for the product change to propagate..."
+      sleep 15
+    fi
+  fi
+
   # Step 2: key fetch + step 3: smoke test
   if [[ "$deploy_status" == "deploy-failed" ]]; then
     demo_test_status+=("skipped (deploy failed)")
@@ -379,6 +490,9 @@ export BASIC_QUOTA_STATUS LLM_SECURITY_STATUS LLM_TOKEN_LIMITS_STATUS MCP_STATUS
 CLOUD_LOGGING_STATUS=$(derive_demo_status "${demo_deploy_status[4]}" "${demo_test_status[4]}")
 THREAT_PROTECTION_STATUS=$(derive_demo_status "${demo_deploy_status[5]}" "${demo_test_status[5]}")
 export CLOUD_LOGGING_STATUS THREAT_PROTECTION_STATUS
+CIRCUIT_BREAKING_STATUS=$(derive_demo_status "${demo_deploy_status[6]}" "${demo_test_status[6]}")
+PER_USER_STATUS=$(derive_demo_status "${demo_deploy_status[7]}" "${demo_test_status[7]}")
+export CIRCUIT_BREAKING_STATUS PER_USER_STATUS
 
 if [[ -z "$BASIC_QUOTA_PREMIUM_KEY" || -z "$LLM_SECURITY_KEY" || -z "$LLM_TOKEN_LIMITS_BRONZE_KEY" || -z "$LLM_TOKEN_LIMITS_SILVER_KEY" || -z "$MCP_CLIENT_ID" ]]; then
   secret_status="skipped (no usable keys)"

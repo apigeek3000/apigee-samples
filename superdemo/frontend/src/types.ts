@@ -32,6 +32,14 @@ export interface DemoMetadata {
   max_json_object_keys?: number
   /** Present only on the `threat-protection` demo. */
   blocked_keywords?: string[]
+  /** Present only on the `llm-circuit-breaking` demo. */
+  primary_region?: string
+  /** Present only on the `llm-circuit-breaking` demo. */
+  secondary_region?: string
+  /** Present only on the `llm-circuit-breaking` demo. Requests allowed before the breaker trips. */
+  failover_threshold?: number
+  /** Present only on the `llm-circuit-breaking` demo. Rolling window, in minutes. */
+  window_minutes?: number
 }
 
 export interface DemosResponse {
@@ -120,4 +128,32 @@ export interface ThreatResponse {
   body: unknown
   blocked: boolean // derived: httpStatus !== 200
   policy: ThreatPolicy
+}
+
+// ── LLM Circuit Breaking demo ────────────────────────────────────────
+
+export type TargetPool = 'primary' | 'secondary' | 'unknown'
+
+export interface CircuitBreakingResponse {
+  httpStatus: number
+  /** From the x-target-pool response header the superdemo patch adds. */
+  targetPool: TargetPool
+  /** From the x-target-region response header. Undefined if absent. */
+  targetRegion?: string
+  text: string
+  latencyMs: number
+  body: unknown
+}
+
+// ── Per-User Token Limits demo ───────────────────────────────────────
+
+export type PerUserId = 'alice' | 'bob'
+
+export interface PerUserResponse {
+  httpStatus: number
+  /** True when the proxy rejected the call with 429 — the point of the demo. */
+  quotaExceeded: boolean
+  text: string
+  totalTokens?: number
+  body: unknown
 }

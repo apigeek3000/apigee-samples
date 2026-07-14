@@ -196,6 +196,26 @@ DEMO_METADATA = {
         ),
         "icon": "🧱",
     },
+    "llm-circuit-breaking": {
+        "id": "llm-circuit-breaking",
+        "title": "LLM Circuit Breaking",
+        "description": (
+            "A failover quota trips after 2 requests in 2 minutes, routing "
+            "traffic to a secondary Vertex AI region. The response headers "
+            "show which target pool actually served each request."
+        ),
+        "icon": "🚧",
+    },
+    "llm-token-limits-per-user": {
+        "id": "llm-token-limits-per-user",
+        "title": "Per-User Token Limits",
+        "description": (
+            "LLM token quotas enforced per end user via an x-userid header, "
+            "not per app. Two users sharing one API key get independent token "
+            "budgets — exhaust one and the other still gets through."
+        ),
+        "icon": "👤",
+    },
     "llm-semantic-cache-v2": {
         "id": "llm-semantic-cache-v2",
         "title": "LLM Semantic Cache",
@@ -214,15 +234,6 @@ DEMO_METADATA = {
         "icon": "🔀",
         "placeholder": True,
     },
-    "llm-circuit-breaking": {
-        "id": "llm-circuit-breaking",
-        "title": "LLM Circuit Breaking",
-        "description": (
-            "Fails over to a backup model when the primary LLM endpoint degrades."
-        ),
-        "icon": "🚧",
-        "placeholder": True,
-    },
     "llm-logging": {
         "id": "llm-logging",
         "title": "LLM Logging",
@@ -230,15 +241,6 @@ DEMO_METADATA = {
             "Logs prompt/response pairs through Apigee for audit and analytics."
         ),
         "icon": "📜",
-        "placeholder": True,
-    },
-    "llm-token-limits-per-user": {
-        "id": "llm-token-limits-per-user",
-        "title": "Per-User Token Limits",
-        "description": (
-            "Enforces per-user LLM token quotas on top of tier-based limits."
-        ),
-        "icon": "👤",
         "placeholder": True,
     },
     "llm-function-calling": {
@@ -286,6 +288,28 @@ def _demo_with_metadata(demo: dict, demo_config: dict) -> dict:
                 enriched[field] = value
     elif demo["id"] == "threat-protection":
         for field in ("max_json_object_keys", "blocked_keywords"):
+            value = demo_config.get(field)
+            if value is not None:
+                enriched[field] = value
+    elif demo["id"] == "llm-circuit-breaking":
+        for field in (
+            "primary_region",
+            "secondary_region",
+            "failover_threshold",
+            "window_minutes",
+            "model",
+        ):
+            value = demo_config.get(field)
+            if value is not None:
+                enriched[field] = value
+    elif demo["id"] == "llm-token-limits-per-user":
+        for field in (
+            "bronze_token_limit",
+            "silver_token_limit",
+            "interval_minutes",
+            "model",
+            "region",
+        ):
             value = demo_config.get(field)
             if value is not None:
                 enriched[field] = value
@@ -412,7 +436,20 @@ def cloud_logging_recent(after_ts: str | None = None) -> dict:
 # demos (cloud-logging, threat-protection) are deliberately absent — the
 # backend must not inject a key for them. apigee-mcp is not here because its
 # routes are owned by mcp_routes.py, not proxy_request.
-DEMOS_REQUIRING_KEY = {"basic-quota", "llm-security", "llm-token-limits-v2"}
+DEMOS_REQUIRING_KEY = {
+    "basic-quota",
+    "llm-security",
+    "llm-token-limits-v2",
+    "llm-token-limits-per-user",
+}
+
+# Demos whose sibling proxy target has no <GoogleAccessToken> and therefore
+# expects the caller to attach an OAuth bearer token for Vertex AI.
+DEMOS_REQUIRING_VERTEX_TOKEN = {
+    "llm-token-limits-v2",
+    "llm-circuit-breaking",
+    "llm-token-limits-per-user",
+}
 
 
 @app.api_route(
@@ -450,6 +487,16 @@ async def proxy_request(demo_name: str, path: str, request: Request):
     elif demo_name == "threat-protection":
         api_key = None
         target_url = f"https://{host}/v1/samples/threat-protection/{path}"
+    elif demo_name == "llm-circuit-breaking":
+        api_key = None
+        target_url = f"https://{host}/v1/samples/llm-circuit-breaking/{path}"
+    elif demo_name == "llm-token-limits-per-user":
+        tier = request.headers.get("x-rate-limit-tier", "bronze")
+        if tier not in ("bronze", "silver"):
+            tier = "bronze"
+        block = config.get("demos", {}).get("llm-token-limits-per-user", {})
+        api_key = block.get(f"{tier}_key")
+        target_url = f"https://{host}/v1/samples/llm-token-limits-per-user/{path}"
     else:
         raise HTTPException(status_code=404, detail=f"Unknown demo: {demo_name}")
 
@@ -471,9 +518,10 @@ async def proxy_request(demo_name: str, path: str, request: Request):
     if demo_name in DEMOS_REQUIRING_KEY:
         out_headers["x-apikey"] = api_key
 
-    # llm-token-limits-v2's target XML has no <GoogleAccessToken>, so
-    # Vertex expects the caller to supply the OAuth bearer token.
-    if demo_name == "llm-token-limits-v2":
+    # These proxies' target XML has no <GoogleAccessToken>, so Vertex expects the
+    # caller to supply the OAuth bearer token. (llm-security's proxy DOES mint its
+    # own, so it must never appear here.)
+    if demo_name in DEMOS_REQUIRING_VERTEX_TOKEN:
         try:
             out_headers["Authorization"] = f"Bearer {_get_bearer_token()}"
         except google.auth.exceptions.DefaultCredentialsError as e:

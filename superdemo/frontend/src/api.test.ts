@@ -4,7 +4,9 @@ import {
   fetchDemos,
   parseQuotaResponse,
   sendBasicQuota,
+  sendCircuitBreaking,
   sendLlmSecurity,
+  sendPerUserTokenLimits,
 } from './api'
 
 vi.mock('./auth', () => ({
@@ -656,6 +658,120 @@ describe('sendThreatJson', () => {
   })
 })
 
+// ── LLM Circuit Breaking demo ────────────────────────────────────────
+
+describe('sendCircuitBreaking', () => {
+  it('reads the target pool and region from the response headers', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          candidates: [{ content: { parts: [{ text: 'blue sky' }] } }],
+        }),
+        {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+            'x-target-pool': 'secondary',
+            'x-target-region': 'us-east4',
+          },
+        },
+      ),
+    )
+
+    const result = await sendCircuitBreaking({
+      prompt: 'why is the sky blue?',
+      projectId: 'p',
+      region: 'us-central1',
+      model: 'gemini-2.5-flash',
+    })
+
+    expect(result.targetPool).toBe('secondary')
+    expect(result.targetRegion).toBe('us-east4')
+    expect(result.httpStatus).toBe(200)
+    expect(result.text).toBe('blue sky')
+    expect(typeof result.latencyMs).toBe('number')
+
+    const url = fetchSpy.mock.calls[0][0] as string
+    expect(url).toContain('/api/proxy/llm-circuit-breaking/')
+    expect(url).toContain('gemini-2.5-flash:generateContent')
+  })
+
+  it('falls back to targetPool "unknown" when the header is absent', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ candidates: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    const result = await sendCircuitBreaking({
+      prompt: 'hi',
+      projectId: 'p',
+      region: 'us-central1',
+      model: 'gemini-2.5-flash',
+    })
+
+    expect(result.targetPool).toBe('unknown')
+    expect(result.targetRegion).toBeUndefined()
+  })
+})
+
+// ── Per-User Token Limits demo ───────────────────────────────────────
+
+describe('sendPerUserTokenLimits', () => {
+  it('sends the tier and user id headers and returns the token count', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          candidates: [{ content: { parts: [{ text: 'hello' }] } }],
+          usageMetadata: { totalTokenCount: 42 },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    )
+
+    const result = await sendPerUserTokenLimits({
+      tier: 'bronze',
+      userId: 'alice',
+      prompt: 'hi',
+      projectId: 'p',
+      region: 'us-central1',
+      model: 'gemini-2.5-flash',
+    })
+
+    expect(result.httpStatus).toBe(200)
+    expect(result.quotaExceeded).toBe(false)
+    expect(result.totalTokens).toBe(42)
+    expect(result.text).toBe('hello')
+
+    const init = fetchSpy.mock.calls[0][1] as RequestInit
+    const headers = new Headers(init.headers)
+    expect(headers.get('x-rate-limit-tier')).toBe('bronze')
+    expect(headers.get('x-userid')).toBe('alice')
+  })
+
+  it('does NOT throw on 429 — the 429 is the demo', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ fault: { faultstring: 'quota violation' } }), {
+        status: 429,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    const result = await sendPerUserTokenLimits({
+      tier: 'bronze',
+      userId: 'alice',
+      prompt: 'hi',
+      projectId: 'p',
+      region: 'us-central1',
+      model: 'gemini-2.5-flash',
+    })
+
+    expect(result.httpStatus).toBe(429)
+    expect(result.quotaExceeded).toBe(true)
+  })
+})
+
 describe('fetchDemos — new metadata fields', () => {
   it('passes through log_name, proxy_name, max_json_object_keys, blocked_keywords', async () => {
     const fetch = mockFetch()
@@ -694,5 +810,34 @@ describe('fetchDemos — new metadata fields', () => {
     expect(cl.proxy_name).toBe('sample-cloud-logging')
     expect(tp.max_json_object_keys).toBe(5)
     expect(tp.blocked_keywords).toEqual(['delete', 'exec'])
+  })
+
+  it('passes circuit-breaking failover fields through normalizeDemo', async () => {
+    const fetch = mockFetch()
+    fetch.mockResolvedValueOnce(
+      jsonResponse({
+        status: 'ready',
+        demos: [
+          {
+            id: 'llm-circuit-breaking',
+            title: 'LLM Circuit Breaking',
+            description: 'd',
+            icon: '🚧',
+            status: 'passing',
+            primary_region: 'us-central1',
+            secondary_region: 'us-east4',
+            failover_threshold: 2,
+            window_minutes: 2,
+          },
+        ],
+      }),
+    )
+
+    const result = await fetchDemos()
+
+    expect(result.demos[0].primary_region).toBe('us-central1')
+    expect(result.demos[0].secondary_region).toBe('us-east4')
+    expect(result.demos[0].failover_threshold).toBe(2)
+    expect(result.demos[0].window_minutes).toBe(2)
   })
 })

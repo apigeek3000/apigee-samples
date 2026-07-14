@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+ Copyright 2026 Google LLC
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+      http://www.apache.org/licenses/LICENSE-2.0
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+<!--
+ Superdemo-owned. The FAULT-FLOW twin of AM-Superdemo-Target-Pool. Injected into
+ a TEMP COPY of llm-circuit-breaking's bundle at deploy time (see
+ patch_circuit_breaking_bundle in superdemo/deploy/lib.sh); the sibling sample is
+ never modified on disk.
+
+ Identical to AM-Superdemo-Target-Pool except for AssignTo. Inside a FaultRule
+ the message returned to the caller is `error`, NOT `response` — writing headers
+ to `response` there sets them on a message nobody sends, and the browser sees no
+ x-target-pool at all. The sibling's own fault-flow policy names the message the
+ same way (see AM-Secondary-Retry.xml), which is the precedent this follows.
+
+ That is why there are two policies rather than one: the anchor in
+ proxies/default.xml sits in a normal response PostFlow, the anchor in
+ targets/primary.xml sits in the FaultRule retry path.
+-->
+<AssignMessage continueOnError="true" enabled="true" name="AM-Superdemo-Target-Pool-Error">
+  <DisplayName>AM-Superdemo-Target-Pool-Error</DisplayName>
+  <Properties/>
+  <Set>
+    <Headers>
+      <Header name="x-target-pool">{target_pool}</Header>
+      <Header name="x-target-region">{balanced_target_region}</Header>
+    </Headers>
+  </Set>
+  <AssignTo createNew="false" transport="http" type="response">error</AssignTo>
+  <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
+</AssignMessage>

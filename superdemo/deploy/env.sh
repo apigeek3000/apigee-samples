@@ -38,6 +38,13 @@ export MODEL_ARMOR_REGION="<your-model-armor-region>"
 # vertex_config.properties). Often the same as MODEL_ARMOR_REGION.
 export REGION="<your-vertex-region>"
 
+# Failover region for the llm-circuit-breaking demo. The circuit-breaking proxy
+# routes to a secondary Vertex backend once the failover quota trips; superdemo
+# points both backends at $PROJECT and distinguishes them by region. Optional —
+# defaults to us-east1 if unset. Must differ from $REGION for the failover to be
+# visibly real in the UI.
+export SECONDARY_REGION="us-east1"
+
 # Defaults — change only if you've customized your setup
 export SERVICE_ACCOUNT_NAME="llm-security-v2-svc-acct"
 export MCP_SERVICE_ACCOUNT_NAME="apigee-mcp-svc-acct"

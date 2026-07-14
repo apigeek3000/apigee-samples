@@ -16,6 +16,10 @@
 
 # Superdemo-only helpers. Not shared with sibling demos.
 
+# Directory this library lives in (.../superdemo/deploy). Used to locate
+# superdemo-owned proxy patches under patches/.
+libdir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
 # require_env_vars <hint> <var_name...>
 #
 # set -u-safe preflight for the vars sourced from secret.sh. shlib's
@@ -187,6 +191,8 @@ derive_demo_status() {
 #   LLM_TOKEN_LIMITS_BRONZE_KEY, LLM_TOKEN_LIMITS_SILVER_KEY,
 #   LLM_TOKEN_LIMITS_STATUS, REGION
 #   MCP_ENDPOINT, MCP_CLIENT_ID, MCP_CLIENT_SECRET, MCP_STATUS
+#   CIRCUIT_BREAKING_STATUS, SECONDARY_REGION
+#   PER_USER_BRONZE_KEY, PER_USER_SILVER_KEY, PER_USER_STATUS
 #
 # Token limits below are mirrored from llm-token-limits-v2/aiproduct-*.json.
 # If those files change, update these constants. (We do not read them at
@@ -224,6 +230,17 @@ build_secret_payload() {
     --argjson ltl_bronze    2000 \
     --argjson ltl_silver    5000 \
     --argjson ltl_interval  5 \
+    --arg cb_status         "$CIRCUIT_BREAKING_STATUS" \
+    --arg cb_primary_region "$REGION" \
+    --arg cb_secondary_region "$SECONDARY_REGION" \
+    --arg cb_model          "$MODEL_NAME" \
+    --argjson cb_threshold  2 \
+    --argjson cb_window     2 \
+    --arg pu_bronze_key     "$PER_USER_BRONZE_KEY" \
+    --arg pu_silver_key     "$PER_USER_SILVER_KEY" \
+    --arg pu_status         "$PER_USER_STATUS" \
+    --arg pu_model          "$MODEL_NAME" \
+    --arg pu_region         "$REGION" \
     '{
       APIGEE_HOST: $apigee_host,
       PROJECT_ID:  $project_id,
@@ -266,6 +283,24 @@ build_secret_payload() {
           status:                $tp_status,
           max_json_object_keys:  $tp_max_keys,
           blocked_keywords:      $tp_blocked
+        },
+        "llm-circuit-breaking": {
+          status:             $cb_status,
+          primary_region:     $cb_primary_region,
+          secondary_region:   $cb_secondary_region,
+          failover_threshold: $cb_threshold,
+          window_minutes:     $cb_window,
+          model:              $cb_model
+        },
+        "llm-token-limits-per-user": {
+          bronze_key:         $pu_bronze_key,
+          silver_key:         $pu_silver_key,
+          status:             $pu_status,
+          bronze_token_limit: $ltl_bronze,
+          silver_token_limit: $ltl_silver,
+          interval_minutes:   $ltl_interval,
+          model:              $pu_model,
+          region:             $pu_region
         }
       }
     }' > "$out_file"
@@ -307,4 +342,229 @@ fetch_app_secret() {
   else
     echo "$secret"
   fi
+}
+
+# inject_target_pool_step <xml_file> <policy_name>
+#
+# Inserts a <Step><Name><policy_name></Name></Step> immediately after every
+# DC-Collect step in <xml_file>, editing it in place. Echoes the number of steps
+# inserted.
+#
+# The sibling llm-circuit-breaking bundle has two DC-Collect steps and BOTH must
+# be patched: one in the ProxyEndpoint PostFlow (the normal routing path) and one
+# in the primary TargetEndpoint's LLMQuota FaultRule (the retry path — PostFlow
+# does not run on faults, which is why the sibling repeats DC-Collect there).
+#
+# They need DIFFERENT policies, hence <policy_name>. In a FaultRule the message
+# returned to the caller is `error`, not `response`, so the fault-path policy must
+# name it explicitly (AM-Superdemo-Target-Pool-Error) or the headers are written
+# to a message that is never sent. The sibling's own AM-Secondary-Retry does the
+# same thing on that path.
+inject_target_pool_step() {
+  local xml_file="$1" policy="$2" tmp count
+  tmp=$(mktemp /tmp/superdemo-patch.XXXXXX.xml)
+
+  if [[ -z "$policy" ]]; then
+    echo "ERROR: inject_target_pool_step requires a policy name" >&2
+    rm -f "$tmp"
+    echo 0
+    return 1
+  fi
+
+  awk -v policy="$policy" '
+    BEGIN { pending = 0 }
+    {
+      print
+      is_anchor = ($0 ~ /<Name>DC-Collect<\/Name>/)
+      # Same-line closing tag (e.g. a collapsed "<Step><Name>DC-Collect</Name></Step>")
+      # must be handled on THIS line, not deferred — otherwise pending would stay
+      # set and the injection would fire at the next unrelated </Step> instead.
+      if (is_anchor && $0 ~ /<\/Step>/) {
+        match($0, /^[ \t]*/)
+        indent = substr($0, 1, RLENGTH)
+        printf "%s<Step>\n%s  <Name>%s</Name>\n%s</Step>\n", \
+          indent, indent, policy, indent
+        pending = 0
+        next
+      }
+      if (is_anchor) { pending = 1; next }
+      if (pending == 1 && $0 ~ /<\/Step>/) {
+        match($0, /^[ \t]*/)
+        indent = substr($0, 1, RLENGTH)
+        printf "%s<Step>\n%s  <Name>%s</Name>\n%s</Step>\n", \
+          indent, indent, policy, indent
+        pending = 0
+      }
+    }
+  ' "$xml_file" > "$tmp"
+
+  count=$(grep -c "<Name>${policy}</Name>" "$tmp" 2>/dev/null || true)
+  [[ -z "$count" ]] && count=0
+  mv "$tmp" "$xml_file"
+  echo "$count"
+}
+
+# patch_circuit_breaking_bundle <sibling_dir>
+#
+# Copies <sibling_dir>/apiproxy into a fresh temp dir, injects the superdemo-owned
+# AM-Superdemo-Target-Pool policy and its <Step>s, and writes vertex_config.properties
+# from superdemo's own env vars. Echoes the temp dir path on success; the caller is
+# responsible for `rm -rf`-ing it.
+#
+# The sibling sample is never written to — that's the whole point of the temp copy
+# (superdemo's scope rule forbids edits outside superdemo/).
+#
+# We write vertex_config.properties ourselves rather than relying on the sibling
+# deploy script having written it: superdemo skips that script when the proxy is
+# already deployed, and the committed properties file is empty.
+#
+# Globals consumed: PROJECT, REGION, SECONDARY_REGION
+# Returns 1 (with nothing on stdout) if either proxies/default.xml or
+# targets/primary.xml yields fewer than 1 DC-Collect anchor — a loud failure is
+# far better than silently deploying a proxy with no failover signal on one of
+# the two paths (normal routing vs. the FaultRule retry path).
+patch_circuit_breaking_bundle() {
+  local sibling_dir="$1" work_dir n f p policy
+  work_dir=$(mktemp -d /tmp/superdemo-cb.XXXXXX)
+
+  if ! cp -R "$sibling_dir/apiproxy" "$work_dir/apiproxy"; then
+    echo "ERROR: could not copy $sibling_dir/apiproxy" >&2
+    rm -rf "$work_dir"
+    return 1
+  fi
+
+  for p in AM-Superdemo-Target-Pool AM-Superdemo-Target-Pool-Error; do
+    if ! cp "$libdir/patches/llm-circuit-breaking/${p}.xml" \
+          "$work_dir/apiproxy/policies/"; then
+      echo "ERROR: could not copy ${p}.xml into the bundle" >&2
+      rm -rf "$work_dir"
+      return 1
+    fi
+  done
+
+  mkdir -p "$work_dir/apiproxy/resources/properties"
+  cat > "$work_dir/apiproxy/resources/properties/vertex_config.properties" <<EOF
+project_p1=$PROJECT
+project_p2=$PROJECT
+region_p1=$REGION
+region_p2=$SECONDARY_REGION
+EOF
+
+  # Each file gets the variant that matches the flow its DC-Collect anchor sits
+  # in. default.xml's is a normal PostFlow response; primary.xml's is inside the
+  # LLMQuota FaultRule, where the message returned to the caller is `error`, not
+  # `response` — so it needs the -Error variant or the headers are set on a
+  # message that never reaches the browser.
+  for f in "$work_dir/apiproxy/proxies/default.xml:AM-Superdemo-Target-Pool" \
+           "$work_dir/apiproxy/targets/primary.xml:AM-Superdemo-Target-Pool-Error"; do
+    policy="${f##*:}"
+    f="${f%:*}"
+    if [[ ! -f "$f" ]]; then
+      echo "ERROR: expected bundle file missing: $f" >&2
+      rm -rf "$work_dir"
+      return 1
+    fi
+    n=$(inject_target_pool_step "$f" "$policy")
+    # Require at least one insertion in EACH file individually — a sum-based
+    # check would be fooled by both anchors landing in the same file (e.g. 2
+    # in default.xml, 0 in primary.xml), silently leaving the retry path
+    # (primary.xml's FaultRule) unpatched.
+    if (( n < 1 )); then
+      echo "ERROR: expected >=1 DC-Collect anchor in $f, found $n." >&2
+      echo "       The sibling sample's proxy XML has probably changed upstream." >&2
+      echo "       Refusing to deploy an unpatched proxy (the demo would show no failover signal)." >&2
+      rm -rf "$work_dir"
+      return 1
+    fi
+  done
+
+  echo "$work_dir"
+}
+
+# ai_product_set_model <product_json> <model>
+#
+# Pure transform: echoes <product_json> with every llmOperations[].model rewritten
+# to <model>, and the server-owned read-only fields stripped so the result can be
+# PUT straight back to the Apigee API.
+#
+# Returns 1 (nothing on stdout) if the product has no llmOperationGroup with at
+# least one llmOperation — i.e. it is not an AI product, so silently "patching"
+# it would be meaningless.
+ai_product_set_model() {
+  local product_json="$1" model="$2"
+
+  if ! jq -e '.llmOperationGroup.operationConfigs[]?.llmOperations[]? | .model' \
+       <<<"$product_json" >/dev/null 2>&1; then
+    return 1
+  fi
+
+  jq --arg m "$model" \
+    '(.llmOperationGroup.operationConfigs[].llmOperations[].model) = $m
+     | del(.createdAt, .lastModifiedAt)' <<<"$product_json"
+}
+
+# ai_product_all_models_are <product_json> <model>
+#
+# Returns 0 iff <product_json> has at least one llmOperation and every one of them
+# binds <model>. The "at least one" half matters: it is what makes this usable to
+# verify an update response, where an API error body would otherwise vacuously pass.
+ai_product_all_models_are() {
+  jq -e --arg m "$2" \
+    '[.llmOperationGroup.operationConfigs[]?.llmOperations[]?.model]
+     | length > 0 and all(. == $m)' <<<"$1" >/dev/null 2>&1
+}
+
+# patch_ai_product_model <product_name> <model>
+#
+# Rewrites the model bound to every llmOperation on <product_name> to <model>.
+#
+# Why this exists: llm-token-limits-v2's AI products (ai-product-{bronze,silver}-v2)
+# hardcode "gemini-2.5-flash" in the sibling sample's aiproduct-*.json. An AI product's
+# operation match includes the model, so when superdemo's MODEL_NAME is anything else
+# (e.g. gemini-2.5-flash-lite) every call is rejected with
+# keymanagement.service.InvalidAPICallAsNoApiProductMatchFound — a valid key, but no
+# product covering that model. Rebinding the deployed product keeps the sibling sample
+# on disk untouched (superdemo's scope rule) and survives a re-run.
+#
+# Echoes "unchanged" when every operation already binds <model> (no API write), or
+# "patched" after a successful update. Returns 1 with a message on stderr otherwise.
+#
+# Globals consumed: PROJECT, TOKEN
+patch_ai_product_model() {
+  local product="$1" model="$2" url current updated response
+
+  url="https://apigee.googleapis.com/v1/organizations/${PROJECT}/apiproducts/${product}"
+
+  current=$(curl -s -H "Authorization: Bearer ${TOKEN}" "$url")
+  if ! jq -e '.name' <<<"$current" >/dev/null 2>&1; then
+    echo "ERROR: could not read API product $product" >&2
+    echo "       $(jq -r '.error.message // .' <<<"$current" 2>/dev/null | head -n 1)" >&2
+    return 1
+  fi
+
+  if ! updated=$(ai_product_set_model "$current" "$model"); then
+    echo "ERROR: $product has no llmOperationGroup — not an AI product?" >&2
+    echo "       The sibling sample's aiproduct-*.json has probably changed upstream." >&2
+    return 1
+  fi
+
+  # Every operation already on the right model: skip the write so re-runs are quiet.
+  if ai_product_all_models_are "$current" "$model"; then
+    echo "unchanged"
+    return 0
+  fi
+
+  response=$(curl -s -X PUT -H "Authorization: Bearer ${TOKEN}" \
+               -H "Content-Type: application/json" \
+               -d "$updated" "$url")
+
+  # Verify against the response body, not curl's exit code: the Apigee API answers a
+  # rejected update with HTTP 400 and a JSON error body, which curl still reports as
+  # success. An error body has no llmOperations at all, which this predicate rejects.
+  if ! ai_product_all_models_are "$response" "$model"; then
+    echo "ERROR: $product update did not take: $(jq -r '.error.message // "unexpected response"' <<<"$response" 2>/dev/null | head -n 1)" >&2
+    return 1
+  fi
+
+  echo "patched"
 }

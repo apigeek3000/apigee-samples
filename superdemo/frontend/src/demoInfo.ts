@@ -20,6 +20,8 @@ const PROXY_NAMES_BY_DEMO: Record<string, string[]> = {
   'apigee-mcp': ['crm-mcp-proxy', 'customers-api', 'mcp-spec-tools'],
   'cloud-logging': ['sample-cloud-logging'],
   'threat-protection': ['threat-protection'],
+  'llm-circuit-breaking': ['llm-circuit-breaking-v1'],
+  'llm-token-limits-per-user': ['llm-token-limits-per-user-v1'],
 }
 
 export function apigeeProxyLinks(
@@ -252,5 +254,61 @@ export const demoInfo: Record<string, DemoInfo> = {
       { label: 'XMLToJSON', href: `${APIGEE_POLICY_BASE}/xml-json-policy` },
     ],
     githubHref: `${GITHUB_BASE}/apigee-mcp`,
+  },
+  'llm-circuit-breaking': {
+    diagram: `flowchart LR
+  Browser([Browser])
+  subgraph Apigee["Apigee Proxy"]
+    Q[Quota<br/>2 per 2 min]
+    RR{RouteRule}
+  end
+  P[(Vertex AI<br/>primary region)]
+  S[(Vertex AI<br/>secondary region)]
+  Browser --> Q --> RR
+  RR -- "under quota" --> P
+  RR -- "quota tripped" --> S
+  P -. "5xx → retry" .-> S`,
+    description:
+      'The breaker counts upstream failures, not requests. Q-LLM-Failover-Counter is attached only to the primary target’s FaultRule (condition: status 429 or > 399), so it increments solely when Vertex AI rejects a call. Q-LLM-Failover then reads that shared rolling-window counter on every request — once 2 failures land inside 2 minutes it trips, and the RouteRule parks traffic on a secondary Vertex AI region until the window rolls off. Within a single failing request, the FaultRule also retries against the secondary region via a ServiceCallout, so the caller still gets an answer. The proxy records the winning target in a flow variable, and superdemo patches it into x-target-pool / x-target-region response headers so the UI can show which backend actually served each request. Because a healthy primary never feeds the counter, normal traffic stays on primary. The sibling sample’s notebook forces a failover with a Cloud Tasks fan-out meant to exhaust the project’s Gemini quota — but Gemini 2.5 is served under dynamic shared quota, which has no per-project limit to exceed, so that trigger is not deterministic. This UI instead sends requests for a model Vertex AI does not publish: the 404 feeds the same counter a 429 would, and the breaker opens every time. Note the quota has no identifier, so it is shared across every caller of this deployment.',
+    policyLinks: [
+      { label: 'Quota', href: `${APIGEE_POLICY_BASE}/quota-policy` },
+      {
+        label: 'ServiceCallout',
+        href: `${APIGEE_POLICY_BASE}/service-callout-policy`,
+      },
+      {
+        label: 'AssignMessage',
+        href: `${APIGEE_POLICY_BASE}/assign-message-policy`,
+      },
+    ],
+    githubHref: `${GITHUB_BASE}/llm-circuit-breaking`,
+  },
+  'llm-token-limits-per-user': {
+    diagram: `flowchart LR
+  Alice([Alice])
+  Bob([Bob])
+  subgraph Apigee["Apigee Proxy"]
+    VK[VerifyAPIKey]
+    TQ["LLMTokenQuota<br/>keyed on x-userid"]
+  end
+  Vertex[(Vertex AI)]
+  Alice -- "x-userid: alice" --> VK
+  Bob -- "x-userid: bob" --> VK
+  VK --> TQ --> Vertex
+  TQ -. "429 when that user's<br/>budget is spent" .-> Alice`,
+    description:
+      "Both users present the same API key, so they share an app and a product — but the token quota is keyed on the x-userid header, so each gets an independent budget. Spend Alice's bronze allowance and she gets a 429 while Bob, on the very same key, still gets a 200. The counter is weighted by the response's usageMetadata.totalTokenCount, so cost is measured in tokens rather than requests.",
+    policyLinks: [
+      {
+        label: 'VerifyAPIKey',
+        href: `${APIGEE_POLICY_BASE}/verify-api-key-policy`,
+      },
+      { label: 'Quota', href: `${APIGEE_POLICY_BASE}/quota-policy` },
+      {
+        label: 'ExtractVariables',
+        href: `${APIGEE_POLICY_BASE}/extract-variables-policy`,
+      },
+    ],
+    githubHref: `${GITHUB_BASE}/llm-token-limits-per-user`,
   },
 }
