@@ -26,6 +26,7 @@ assert_equal "failing"    "$(derive_demo_status 'deployed' 'failed (HTTP 429)')"
 assert_equal "failing"    "$(derive_demo_status 'deployed' 'test-error')"                         "  deployed + curl error → failing"
 assert_equal "failing"    "$(derive_demo_status 'skipped (already deployed)' 'skipped (key-missing)')" "  already-deployed + missing API key → failing"
 assert_equal "undeployed" "$(derive_demo_status 'deploy-failed' 'skipped (deploy failed)')"       "  deploy failed → undeployed"
+assert_equal "undeployed" "$(derive_demo_status 'skipped (index prereq missing)' 'skipped (index prereq missing)')" "  index prereq missing → undeployed"
 
 echo
 echo "build_secret_payload: writes nested-shape superdemo-config JSON"
@@ -54,6 +55,10 @@ echo "build_secret_payload: writes nested-shape superdemo-config JSON"
   export PER_USER_BRONZE_KEY="pu-bronze-003"
   export PER_USER_SILVER_KEY="pu-silver-004"
   export PER_USER_STATUS="passing"
+  export SEMANTIC_CACHE_STATUS="passing"
+  export EMBEDDINGS_MODEL_ID="text-embedding-005"
+  export NEAREST_NEIGHBOR_DISTANCE="0.95"
+  export CACHE_ENTRY_TTL_SEC="300"
 
   tmpfile=$(mktemp /tmp/superdemo-payload.XXXXXX.json)
   build_secret_payload "$tmpfile"
@@ -121,6 +126,14 @@ echo "build_secret_payload: writes nested-shape superdemo-config JSON"
       "interval_minutes": 5,
       "model": "gemini-fake",
       "region": "us-east1"
+    },
+    "llm-semantic-cache-v2": {
+      "status": "passing",
+      "model": "gemini-fake",
+      "region": "us-east1",
+      "embeddings_model": "text-embedding-005",
+      "similarity_threshold": 0.95,
+      "ttl_seconds": 300
     }
   }
 }
@@ -677,6 +690,62 @@ echo "ai_product_set_model / ai_product_all_models_are: rebind an AI product's m
     echo "PASS:   fails loudly on a non-AI product (no llmOperationGroup)"
   fi
   exit $fail
+) || fail=1
+
+echo
+echo "is_semantic_cache_index_ready: true only when the endpoint has the deployed index"
+(
+  stub_dir=$(mktemp -d /tmp/superdemo-stub.XXXXXX)
+  # Ready: endpoint exists AND has the deployed index id.
+  cat > "$stub_dir/gcloud" <<'STUB'
+#!/bin/bash
+cat <<'JSON'
+[
+  {
+    "displayName": "semantic-cache-index-endpoint",
+    "deployedIndexes": [ { "id": "semantic_cache_index_endpoint_deployment" } ]
+  }
+]
+JSON
+STUB
+  chmod +x "$stub_dir/gcloud"
+  export PATH="$stub_dir:$PATH"
+
+  if is_semantic_cache_index_ready "proj" "us-east1"; then
+    echo "PASS:   ready when deployed index present"
+  else
+    echo "FAIL:   expected ready"
+    rm -rf "$stub_dir"; exit 1
+  fi
+
+  # Not ready: endpoint exists but no deployed index yet.
+  cat > "$stub_dir/gcloud" <<'STUB'
+#!/bin/bash
+cat <<'JSON'
+[ { "displayName": "semantic-cache-index-endpoint" } ]
+JSON
+STUB
+  chmod +x "$stub_dir/gcloud"
+  if is_semantic_cache_index_ready "proj" "us-east1"; then
+    echo "FAIL:   expected not-ready when no deployed index"
+    rm -rf "$stub_dir"; exit 1
+  else
+    echo "PASS:   not ready when endpoint has no deployed index"
+  fi
+
+  # Not ready: no matching endpoint at all.
+  cat > "$stub_dir/gcloud" <<'STUB'
+#!/bin/bash
+echo '[]'
+STUB
+  chmod +x "$stub_dir/gcloud"
+  if is_semantic_cache_index_ready "proj" "us-east1"; then
+    echo "FAIL:   expected not-ready when endpoint absent"
+    rm -rf "$stub_dir"; exit 1
+  else
+    echo "PASS:   not ready when endpoint absent"
+  fi
+  rm -rf "$stub_dir"
 ) || fail=1
 
 if (( fail != 0 )); then

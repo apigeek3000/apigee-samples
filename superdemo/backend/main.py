@@ -220,10 +220,12 @@ DEMO_METADATA = {
         "id": "llm-semantic-cache-v2",
         "title": "LLM Semantic Cache",
         "description": (
-            "Caches semantically-similar prompts to cut LLM cost and latency."
+            "Apigee's SemanticCacheLookup embeds each prompt and searches a "
+            "Vertex AI Vector Search index; a semantically-similar prompt is "
+            "served straight from the cache, skipping the model call. Latency "
+            "shows the speedup."
         ),
         "icon": "🧠",
-        "placeholder": True,
     },
     "llm-routing": {
         "id": "llm-routing",
@@ -309,6 +311,17 @@ def _demo_with_metadata(demo: dict, demo_config: dict) -> dict:
             "interval_minutes",
             "model",
             "region",
+        ):
+            value = demo_config.get(field)
+            if value is not None:
+                enriched[field] = value
+    elif demo["id"] == "llm-semantic-cache-v2":
+        for field in (
+            "model",
+            "region",
+            "embeddings_model",
+            "similarity_threshold",
+            "ttl_seconds",
         ):
             value = demo_config.get(field)
             if value is not None:
@@ -449,6 +462,7 @@ DEMOS_REQUIRING_VERTEX_TOKEN = {
     "llm-token-limits-v2",
     "llm-circuit-breaking",
     "llm-token-limits-per-user",
+    "llm-semantic-cache-v2",
 }
 
 
@@ -497,6 +511,9 @@ async def proxy_request(demo_name: str, path: str, request: Request):
         block = config.get("demos", {}).get("llm-token-limits-per-user", {})
         api_key = block.get(f"{tier}_key")
         target_url = f"https://{host}/v1/samples/llm-token-limits-per-user/{path}"
+    elif demo_name == "llm-semantic-cache-v2":
+        api_key = None
+        target_url = f"https://{host}/v2/samples/llm-semantic-cache/{path}"
     else:
         raise HTTPException(status_code=404, detail=f"Unknown demo: {demo_name}")
 

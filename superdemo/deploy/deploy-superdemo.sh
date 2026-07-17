@@ -52,6 +52,14 @@ export PROJECT_P2="$PROJECT"
 export REGION_P1="$REGION"
 export REGION_P2="$SECONDARY_REGION"
 
+# llm-semantic-cache-v2's sibling deploy reads these. MODEL_ID mirrors MODEL_NAME
+# (the proxy is a generic Vertex passthrough; the model is chosen per-request).
+# The three tunables default here so a secret.sh predating this demo still works.
+export MODEL_ID="${MODEL_ID:-$MODEL_NAME}"
+export EMBEDDINGS_MODEL_ID="${EMBEDDINGS_MODEL_ID:-text-embedding-005}"
+export NEAREST_NEIGHBOR_DISTANCE="${NEAREST_NEIGHBOR_DISTANCE:-0.95}"
+export CACHE_ENTRY_TTL_SEC="${CACHE_ENTRY_TTL_SEC:-300}"
+
 # llm-security-v2 also requires these:
 check_shell_variables PROJECT_ID SERVICE_ACCOUNT_NAME MODEL_NAME MODEL_ARMOR_REGION MODEL_ARMOR_TEMPLATE_ID
 
@@ -136,6 +144,7 @@ demo_labels=(
   "threat-protection"
   "llm-circuit-breaking"
   "llm-token-limits-per-user"
+  "llm-semantic-cache-v2"
 )
 demo_proxy_names=(
   "basic-quota"
@@ -146,6 +155,7 @@ demo_proxy_names=(
   "threat-protection"
   "llm-circuit-breaking-v1"
   "llm-token-limits-per-user-v1"
+  "llm-semantic-cache-v2"
 )
 demo_deploy_dirs=(
   "$rootdir/basic-quota"
@@ -156,6 +166,7 @@ demo_deploy_dirs=(
   "$rootdir/threat-protection"
   "$rootdir/llm-circuit-breaking"
   "$rootdir/llm-token-limits-per-user"
+  "$rootdir/llm-semantic-cache-v2"
 )
 demo_deploy_cmds=(
   "./deploy-basic-quota.sh"
@@ -166,6 +177,7 @@ demo_deploy_cmds=(
   "./deploy-threat-protection.sh"
   "./deploy-llm-circuit-breaking.sh"
   "./deploy-llm-token-limits-per-user.sh"
+  "./deploy-llm-semantic-cache-v2.sh"
 )
 
 # Result accumulators, populated by the loop.
@@ -244,7 +256,7 @@ fetch_keys_for_demo() {
         "ai-consumer-app-per-user" "ai-product-silver-per-user")
       demo_smoke_key="$PER_USER_BRONZE_KEY"
       ;;
-    cloud-logging|threat-protection|llm-circuit-breaking)
+    cloud-logging|threat-protection|llm-circuit-breaking|llm-semantic-cache-v2)
       # These demos' sibling proxies are unsecured (no VerifyAPIKey), so no
       # consumer key fetch is needed. Use a non-empty sentinel so the empty
       # check downstream still treats this as "we have what we need".
@@ -348,6 +360,17 @@ run_smoke_test() {
               -d "$body")
       curl_ok=$?
       ;;
+    llm-semantic-cache-v2)
+      url="https://$APIGEE_HOST/v2/samples/llm-semantic-cache/v1/projects/$PROJECT/locations/$REGION/publishers/google/models/$MODEL_NAME:generateContent"
+      body='{"contents":[{"role":"user","parts":[{"text":"ping"}]}]}'
+      # No VerifyAPIKey on this proxy, but its target has no <GoogleAccessToken>,
+      # so Vertex expects the caller to attach the OAuth bearer token.
+      code=$(smoke_test_proxy "$label" POST "$url" \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+              -d "$body")
+      curl_ok=$?
+      ;;
     *)
       echo "test-error (unknown demo)"
       return
@@ -381,6 +404,20 @@ for i in "${!demo_labels[@]}"; do
 
   echo
   echo "--- $label ---"
+
+  # Semantic cache needs a Vector Search index endpoint this script never
+  # provisions (slow + billed hourly). If the operator hasn't run
+  # setup-semantic-cache-index.sh AND the proxy isn't already deployed, record
+  # it undeployed and move on — every other demo still deploys.
+  if [[ "$label" == "llm-semantic-cache-v2" ]] \
+     && ! is_proxy_deployed_to_env "$proxy_name" "$APIGEE_ENV" "$PROJECT" "$TOKEN" >/dev/null 2>&1 \
+     && ! is_semantic_cache_index_ready "$PROJECT" "$REGION"; then
+    echo "  Vector Search index endpoint not ready."
+    echo "  Run ./superdemo/deploy/setup-semantic-cache-index.sh first (~20-30 min), then re-run."
+    demo_deploy_status+=("skipped (index prereq missing)")
+    demo_test_status+=("skipped (index prereq missing)")
+    continue
+  fi
 
   # Step 1: skip check
   deploy_status=""
@@ -493,6 +530,8 @@ export CLOUD_LOGGING_STATUS THREAT_PROTECTION_STATUS
 CIRCUIT_BREAKING_STATUS=$(derive_demo_status "${demo_deploy_status[6]}" "${demo_test_status[6]}")
 PER_USER_STATUS=$(derive_demo_status "${demo_deploy_status[7]}" "${demo_test_status[7]}")
 export CIRCUIT_BREAKING_STATUS PER_USER_STATUS
+SEMANTIC_CACHE_STATUS=$(derive_demo_status "${demo_deploy_status[8]}" "${demo_test_status[8]}")
+export SEMANTIC_CACHE_STATUS
 
 if [[ -z "$BASIC_QUOTA_PREMIUM_KEY" || -z "$LLM_SECURITY_KEY" || -z "$LLM_TOKEN_LIMITS_BRONZE_KEY" || -z "$LLM_TOKEN_LIMITS_SILVER_KEY" || -z "$MCP_CLIENT_ID" ]]; then
   secret_status="skipped (no usable keys)"

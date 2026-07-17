@@ -247,6 +247,7 @@ def test_list_demos_includes_status(fake_config):
         "threat-protection": "unknown",
         "llm-circuit-breaking": "unknown",
         "llm-token-limits-per-user": "unknown",
+        "llm-semantic-cache-v2": "unknown",
     }
 
 
@@ -462,17 +463,15 @@ def test_proxy_llm_token_limits_missing_adc_returns_500(fake_config, monkeypatch
 
 
 PLACEHOLDER_DEMO_IDS = {
-    "llm-semantic-cache-v2",
     "llm-routing",
     "llm-logging",
     "llm-function-calling",
 }
 
 
-def test_list_demos_includes_four_placeholder_demos():
-    """All four remaining placeholder demos appear with status=placeholder and
-    placeholder=True. (llm-circuit-breaking and llm-token-limits-per-user were
-    promoted to real demos.)"""
+def test_list_demos_includes_three_placeholder_demos():
+    """The three remaining placeholder demos appear with status=placeholder and
+    placeholder=True. (llm-semantic-cache-v2 was promoted to a real demo.)"""
     response = client.get("/api/demos")
     data = response.json()
     by_id = {d["id"]: d for d in data["demos"]}
@@ -790,6 +789,58 @@ def test_proxy_per_user_injects_tier_key_and_userid(
     captured = route.calls.last.request
     assert captured.headers["x-apikey"] == expected_key
     assert captured.headers["x-userid"] == "alice"
+    assert captured.headers["authorization"] == f"Bearer {fake_bearer_token}"
+
+
+def test_list_demos_includes_semantic_cache(fake_config):
+    """llm-semantic-cache-v2 is a real demo now, not a placeholder."""
+    fake_config["demos"]["llm-semantic-cache-v2"] = {"status": "passing"}
+    response = client.get("/api/demos")
+    assert response.status_code == 200
+    demos = {d["id"]: d for d in response.json()["demos"]}
+    sc = demos["llm-semantic-cache-v2"]
+    assert not sc.get("placeholder")
+    assert sc["title"] == "LLM Semantic Cache"
+    assert sc["status"] == "passing"
+
+
+def test_list_demos_semantic_cache_enrichment(fake_config):
+    """Secret-sourced cache fields are merged into the demo metadata."""
+    fake_config["demos"]["llm-semantic-cache-v2"] = {
+        "status": "passing",
+        "model": "gemini-fake",
+        "region": "us-central1",
+        "embeddings_model": "text-embedding-005",
+        "similarity_threshold": 0.95,
+        "ttl_seconds": 300,
+    }
+    response = client.get("/api/demos")
+    demos = {d["id"]: d for d in response.json()["demos"]}
+    sc = demos["llm-semantic-cache-v2"]
+    assert sc["model"] == "gemini-fake"
+    assert sc["region"] == "us-central1"
+    assert sc["embeddings_model"] == "text-embedding-005"
+    assert sc["similarity_threshold"] == 0.95
+    assert sc["ttl_seconds"] == 300
+
+
+def test_proxy_semantic_cache_sends_bearer_without_api_key(
+    fake_config, fake_bearer_token
+):
+    """No VerifyAPIKey on this proxy, but Vertex needs the caller's bearer token."""
+    target = f"https://{FAKE_HOST}/v2/samples/llm-semantic-cache/v1/projects/p/locations/r/publishers/google/models/m:generateContent"
+    with respx.mock(assert_all_called=True) as mock:
+        route = mock.route(url__startswith=target).respond(
+            200, json={"candidates": []}
+        )
+        response = client.post(
+            "/api/proxy/llm-semantic-cache-v2/v1/projects/p/locations/r/publishers/google/models/m:generateContent",
+            json={"contents": []},
+        )
+
+    assert response.status_code == 200
+    captured = route.calls.last.request
+    assert "x-apikey" not in {k.lower() for k in captured.headers}
     assert captured.headers["authorization"] == f"Bearer {fake_bearer_token}"
 
 

@@ -51,6 +51,15 @@ export MCP_SERVICE_ACCOUNT_NAME="apigee-mcp-svc-acct"
 export MODEL_ARMOR_TEMPLATE_ID="apigee-modelarmor-template"
 export MODEL_NAME="gemini-2.5-flash"
 
+# ── LLM Semantic Cache demo ───────────────────────────────────────────
+# The semantic-cache proxy needs a Vertex AI Vector Search index+endpoint that
+# is slow (~20-30 min) and billed hourly. deploy-superdemo.sh does NOT create
+# it — run ./superdemo/deploy/setup-semantic-cache-index.sh first. These tune
+# the sibling deploy + what the UI displays.
+export EMBEDDINGS_MODEL_ID="text-embedding-005"
+export NEAREST_NEIGHBOR_DISTANCE="0.95"   # bigger = prompts must be MORE similar to hit
+export CACHE_ENTRY_TTL_SEC="300"          # cache entry lifetime, seconds
+
 # Apigee proxy runtime service account for the apigee-mcp demo. deploy-superdemo.sh
 # creates this SA if missing and grants it roles/run.invoker (so the crm-mcp-proxy
 # and customers-api proxies can invoke their Cloud Run targets) and roles/apihub.admin

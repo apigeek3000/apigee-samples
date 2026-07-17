@@ -117,6 +117,26 @@ is_proxy_deployed_to_env() {
   return 1
 }
 
+# is_semantic_cache_index_ready <project> <region>
+#
+# Returns 0 iff a Vertex AI Vector Search index endpoint named
+# "semantic-cache-index-endpoint" exists AND has an index deployed under the id
+# "semantic_cache_index_endpoint_deployment" (the id the sibling proxy's
+# SemanticCacheLookup policy targets). Used to gate the semantic-cache demo:
+# the endpoint is slow to deploy (~20-30 min) and billed hourly, so
+# deploy-superdemo.sh never provisions it — setup-semantic-cache-index.sh does.
+is_semantic_cache_index_ready() {
+  local project="$1" region="$2" count
+  count=$(gcloud ai index-endpoints list \
+            --project="$project" --region="$region" --format="json" 2>/dev/null \
+          | jq -r '[.[]
+              | select(.displayName == "semantic-cache-index-endpoint")
+              | .deployedIndexes[]?
+              | select(.id == "semantic_cache_index_endpoint_deployment")]
+              | length' 2>/dev/null)
+  [[ "$count" =~ ^[0-9]+$ ]] && (( count > 0 ))
+}
+
 # smoke_test_proxy <label> <method> <url> [curl_args...]
 #
 # Runs curl with the supplied method, URL and extra args, echoing only the
@@ -163,7 +183,7 @@ derive_demo_status() {
   local deploy_status="$1" test_status="$2"
 
   case "$deploy_status" in
-    deploy-failed)
+    deploy-failed|"skipped (index prereq missing)")
       echo "undeployed"
       return
       ;;
@@ -241,6 +261,12 @@ build_secret_payload() {
     --arg pu_status         "$PER_USER_STATUS" \
     --arg pu_model          "$MODEL_NAME" \
     --arg pu_region         "$REGION" \
+    --arg sc_status         "$SEMANTIC_CACHE_STATUS" \
+    --arg sc_model          "$MODEL_NAME" \
+    --arg sc_region         "$REGION" \
+    --arg sc_embeddings     "$EMBEDDINGS_MODEL_ID" \
+    --argjson sc_threshold  "$NEAREST_NEIGHBOR_DISTANCE" \
+    --argjson sc_ttl        "$CACHE_ENTRY_TTL_SEC" \
     '{
       APIGEE_HOST: $apigee_host,
       PROJECT_ID:  $project_id,
@@ -301,6 +327,14 @@ build_secret_payload() {
           interval_minutes:   $ltl_interval,
           model:              $pu_model,
           region:             $pu_region
+        },
+        "llm-semantic-cache-v2": {
+          status:               $sc_status,
+          model:                $sc_model,
+          region:               $sc_region,
+          embeddings_model:     $sc_embeddings,
+          similarity_threshold: $sc_threshold,
+          ttl_seconds:          $sc_ttl
         }
       }
     }' > "$out_file"

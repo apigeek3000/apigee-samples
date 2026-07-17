@@ -40,6 +40,12 @@ export interface DemoMetadata {
   failover_threshold?: number
   /** Present only on the `llm-circuit-breaking` demo. Rolling window, in minutes. */
   window_minutes?: number
+  /** Present only on the `llm-semantic-cache-v2` demo. */
+  embeddings_model?: string
+  /** Present only on the `llm-semantic-cache-v2` demo. Vector-distance cache-hit threshold. */
+  similarity_threshold?: number
+  /** Present only on the `llm-semantic-cache-v2` demo. Cache entry TTL, seconds. */
+  ttl_seconds?: number
 }
 
 export interface DemosResponse {
@@ -154,6 +160,17 @@ export interface PerUserResponse {
   /** True when the proxy rejected the call with 429 — the point of the demo. */
   quotaExceeded: boolean
   text: string
+  totalTokens?: number
+  body: unknown
+}
+
+// ── LLM Semantic Cache demo ──────────────────────────────────────────
+
+export interface SemanticCacheResponse {
+  httpStatus: number
+  text: string
+  /** Round-trip latency measured client-side with performance.now(). */
+  latencyMs: number
   totalTokens?: number
   body: unknown
 }

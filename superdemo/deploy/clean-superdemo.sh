@@ -167,6 +167,21 @@ if [ -f "$rootdir/llm-token-limits-per-user/undeploy-llm-token-limits-per-user.s
 fi
 
 # ====================================================================
+# Clean llm-semantic-cache-v2 (proxy + App Integration, then the index)
+# ====================================================================
+echo "============================================="
+echo " Cleaning LLM Semantic Cache"
+echo "============================================="
+if [ -f "$rootdir/llm-semantic-cache-v2/undeploy-llm-semantic-cache-v2.sh" ]; then
+  cd "$rootdir/llm-semantic-cache-v2"
+  ./undeploy-llm-semantic-cache-v2.sh || true
+fi
+# Delete the Vector Search index + endpoint so the hourly-billed endpoint does
+# not dangle after teardown. Best-effort — never block the rest of cleanup.
+cd "$scriptdir"
+./setup-semantic-cache-index.sh --teardown || true
+
+# ====================================================================
 # Delete Secret Manager secret
 # ====================================================================
 cd "$rootdir"

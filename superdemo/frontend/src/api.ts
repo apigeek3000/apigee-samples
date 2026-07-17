@@ -15,6 +15,7 @@ import type {
   RateLimitResponse,
   RateLimitTier,
   RecentLogResponse,
+  SemanticCacheResponse,
   TargetPool,
   ThreatResponse,
   VertexContent,
@@ -88,6 +89,9 @@ function normalizeDemo(raw: unknown): DemoMetadata {
     secondary_region: d.secondary_region,
     failover_threshold: d.failover_threshold,
     window_minutes: d.window_minutes,
+    embeddings_model: d.embeddings_model,
+    similarity_threshold: d.similarity_threshold,
+    ttl_seconds: d.ttl_seconds,
   }
 }
 
@@ -499,6 +503,51 @@ export async function sendPerUserTokenLimits(
     quotaExceeded: response.status === 429,
     text: parsed.text,
     totalTokens: parsed.totalTokens,
+    body,
+  }
+}
+
+// ── LLM Semantic Cache demo ──────────────────────────────────────────
+
+interface SemanticCacheRequest {
+  prompt: string
+  projectId: string
+  region: string
+  model: string
+}
+
+export async function sendSemanticCache(
+  req: SemanticCacheRequest,
+): Promise<SemanticCacheResponse> {
+  const path = `v1/projects/${req.projectId}/locations/${req.region}/publishers/google/models/${req.model}:generateContent`
+  const startedAt = performance.now()
+  const response = await authedFetch(
+    `${PROXY_PREFIX}/llm-semantic-cache-v2/${path}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: req.prompt }] }],
+      }),
+    },
+  )
+  const latencyMs = Math.round(performance.now() - startedAt)
+
+  const text = await response.text()
+  let body: unknown
+  try {
+    body = text ? JSON.parse(text) : null
+  } catch {
+    body = text
+  }
+
+  // Reuse the shared Vertex parser for candidate text + usage tokens.
+  const parsed = parseRateLimitResponse(body)
+  return {
+    httpStatus: response.status,
+    text: parsed.text,
+    totalTokens: parsed.totalTokens,
+    latencyMs,
     body,
   }
 }

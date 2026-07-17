@@ -38,12 +38,16 @@ cp ./superdemo/deploy/env.sh ./superdemo/deploy/secret.sh
 ```bash
 source ./superdemo/deploy/secret.sh
 ```
-4. Deploy all demo proxies and store the resulting keys in the `superdemo-config` secret:
+4. (Optional — for the **LLM Semantic Cache** demo) Provision its Vertex AI Vector Search index. Takes ~20–30 min and is billed hourly while it exists; skip it and every other demo still deploys.
+```bash
+./superdemo/deploy/setup-semantic-cache-index.sh
+```
+5. Deploy all demo proxies and store the resulting keys in the `superdemo-config` secret:
 ```bash
 ./superdemo/deploy/deploy-superdemo.sh
 ```
 
-To tear everything down: `./superdemo/deploy/clean-superdemo.sh`.
+To tear everything down (including the Vector Search index): `./superdemo/deploy/clean-superdemo.sh`.
 
 ## Local dev
 

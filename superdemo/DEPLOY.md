@@ -19,9 +19,9 @@ runs without sign-in by default — see *How the auth toggle works* below.
    the active project set (see SETUP.md → *Authenticate and set the active
    project*).
 3. Your `secret.sh` sourced in the current shell:
-   ```bash
-   source ./superdemo/deploy/secret.sh
-   ```
+```bash
+source ./superdemo/deploy/secret.sh
+```
 
 ## Configure authentication (Firebase)
 

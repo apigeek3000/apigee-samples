@@ -14,6 +14,7 @@ import { CloudLoggingDemo } from './components/CloudLoggingDemo'
 import { ThreatProtectionDemo } from './components/ThreatProtectionDemo'
 import { LlmCircuitBreakingDemo } from './components/LlmCircuitBreakingDemo'
 import { LlmTokenLimitsPerUserDemo } from './components/LlmTokenLimitsPerUserDemo'
+import { LlmSemanticCacheDemo } from './components/LlmSemanticCacheDemo'
 import { EmptyState } from './components/EmptyState'
 import { LoginScreen } from './components/LoginScreen'
 import { useShowStatus } from './hooks/useShowStatus'
@@ -139,6 +140,11 @@ export function App() {
             activeDemo?.id === 'llm-token-limits-per-user' &&
             demos && (
               <LlmTokenLimitsPerUserDemo demos={demos} demo={activeDemo} />
+            )}
+          {!activeDemo?.placeholder &&
+            activeDemo?.id === 'llm-semantic-cache-v2' &&
+            demos && (
+              <LlmSemanticCacheDemo demos={demos} demo={activeDemo} />
             )}
         </div>
       </main>

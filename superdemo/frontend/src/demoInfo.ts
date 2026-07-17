@@ -22,6 +22,7 @@ const PROXY_NAMES_BY_DEMO: Record<string, string[]> = {
   'threat-protection': ['threat-protection'],
   'llm-circuit-breaking': ['llm-circuit-breaking-v1'],
   'llm-token-limits-per-user': ['llm-token-limits-per-user-v1'],
+  'llm-semantic-cache-v2': ['llm-semantic-cache-v2'],
 }
 
 export function apigeeProxyLinks(
@@ -326,5 +327,33 @@ export const demoInfo: Record<string, DemoInfo> = {
       },
     ],
     githubHref: `${GITHUB_BASE}/llm-token-limits-per-user`,
+  },
+  'llm-semantic-cache-v2': {
+    diagram: `flowchart LR
+  Browser([Browser])
+  subgraph Apigee["Apigee Proxy"]
+    SCL[SemanticCacheLookup]
+    SCP[SemanticCachePopulate]
+  end
+  VS[(Vertex AI<br/>Vector Search)]
+  Vertex[(Vertex AI)]
+  Browser -- prompt --> SCL
+  SCL -- embed + search --> VS
+  SCL -. cache hit .-> Browser
+  SCL -- miss --> Vertex --> SCP --> Browser
+  SCP -- upsert embedding --> VS`,
+    description:
+      "SemanticCacheLookup embeds the incoming prompt with an embeddings model, then does a nearest-neighbour search over a Vertex AI Vector Search index. If a prior prompt's embedding is within the distance threshold, its cached response is returned immediately and the model call is skipped. On a miss, the request reaches Vertex AI and SemanticCachePopulate stores the new prompt embedding and response for the configured TTL. The superdemo surfaces no hit/miss flag — the latency drop on a reworded prompt is the signal.",
+    policyLinks: [
+      {
+        label: 'SemanticCacheLookup',
+        href: `${APIGEE_POLICY_BASE}/semantic-cache-lookup-policy`,
+      },
+      {
+        label: 'SemanticCachePopulate',
+        href: `${APIGEE_POLICY_BASE}/semantic-cache-populate-policy`,
+      },
+    ],
+    githubHref: `${GITHUB_BASE}/llm-semantic-cache-v2`,
   },
 }
