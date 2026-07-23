@@ -104,7 +104,7 @@ def test_list_demos_unconfigured():
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "unconfigured"
-    assert len(data["demos"]) == 12
+    assert len(data["demos"]) == 49
     for demo in data["demos"]:
         if demo.get("placeholder"):
             continue
@@ -500,6 +500,52 @@ def test_real_demos_are_not_marked_as_placeholder():
     for demo in data["demos"]:
         if demo["id"] in real_ids:
             assert demo.get("placeholder") is not True
+
+
+VALID_CATEGORIES = {
+    "ai-llm",
+    "security-auth",
+    "operations-portals",
+    "backends-integration",
+}
+
+
+def test_every_demo_has_a_valid_category():
+    """Every demo returned by /api/demos carries a category from the known set."""
+    response = client.get("/api/demos")
+    data = response.json()
+    for demo in data["demos"]:
+        assert demo.get("category") in VALID_CATEGORIES, (
+            f"{demo['id']} has invalid category {demo.get('category')!r}"
+        )
+
+
+def test_list_demos_returns_all_49_samples():
+    """The catalog surfaces every sample: 9 wired + 40 placeholders."""
+    response = client.get("/api/demos")
+    data = response.json()
+    assert len(data["demos"]) == 49
+    placeholders = [d for d in data["demos"] if d.get("placeholder")]
+    assert len(placeholders) == 40
+
+
+def test_newly_added_samples_are_placeholders():
+    """A spot-check of new placeholder samples across categories."""
+    response = client.get("/api/demos")
+    by_id = {d["id"]: d for d in response.json()["demos"]}
+    spot_check = {
+        "llm-inference-gateway": "ai-llm",
+        "cors": "security-auth",
+        "spike-arrest": "operations-portals",
+        "apiproduct-operations": "operations-portals",
+        "grpc": "backends-integration",
+        "websockets": "backends-integration",
+    }
+    for pid, category in spot_check.items():
+        assert pid in by_id, f"missing sample: {pid}"
+        assert by_id[pid]["placeholder"] is True
+        assert by_id[pid]["status"] == "placeholder"
+        assert by_id[pid]["category"] == category
 
 
 def test_list_demos_includes_apigee_mcp():

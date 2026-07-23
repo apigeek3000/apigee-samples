@@ -165,3 +165,48 @@
   transform: translateX(16px);
   background: var(--accent);
 }
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.categoryHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 8px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted, #6b7280);
+  white-space: nowrap;
+  width: 100%;
+  background: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+  transition: color 0.15s ease;
+}
+
+.categoryHeader:hover {
+  color: var(--text);
+}
+
+.categoryChevron {
+  font-size: 10px;
+  line-height: 1;
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.categoryChevronOpen {
+  transform: rotate(90deg);
+}
+
+.categoryIcon {
+  font-size: 13px;
+}

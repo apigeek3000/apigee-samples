@@ -47,9 +47,9 @@ const readyDemos: DemosResponse = {
   host: 'apigee.test',
   project_id: 'fake-project',
   demos: [
-    { id: 'basic-quota', title: 'Basic Quota', description: 'Shows Apigee enforcing different per-product quotas on a single shared proxy.', icon: '⏱️', status: 'passing' },
+    { id: 'basic-quota', category: 'operations-portals', title: 'Basic Quota', description: 'Shows Apigee enforcing different per-product quotas on a single shared proxy.', icon: '⏱️', status: 'passing' },
     {
-      id: 'llm-security',
+      id: 'llm-security', category: 'ai-llm',
       title: 'LLM Security v2',
       description: 'Apigee calls out to Model Armor to inspect every prompt.',
       icon: '🛡️',
@@ -121,9 +121,15 @@ describe('App — sidebar and homepage navigation', () => {
     // Initially we are on the Homepage
     await screen.findByRole('heading', { level: 1, name: /Apigee Super Demos/i })
 
-    // Click sidebar button to go to "Basic Quota" (anchored to avoid homepage card conflict)
+    // Sidebar sections are collapsed by default — expand the demo's category
+    // first, then click the (now visible) sidebar button. Anchored to avoid the
+    // homepage card, whose accessible name is "Open demo: Basic Quota…".
+    const sidebar = screen.getByRole('navigation', { name: /Demos/i })
     await user.click(
-      screen.getByRole('button', { name: /^Basic Quota$/i }),
+      within(sidebar).getByRole('button', { name: /Operations & Traffic/i }),
+    )
+    await user.click(
+      within(sidebar).getByRole('button', { name: /^Basic Quota$/i }),
     )
 
     // Expect "Basic Quota" demo page to render
@@ -165,7 +171,7 @@ describe('App — sidebar and homepage navigation', () => {
       project_id: 'p',
       demos: [
         {
-          id: 'llm-token-limits-v2',
+          id: 'llm-token-limits-v2', category: 'ai-llm',
           title: 'LLM Rate Limiting',
           description: 'd',
           icon: '⚡',
@@ -201,7 +207,7 @@ describe('App — placeholder demos', () => {
       project_id: 'p',
       demos: [
         {
-          id: 'llm-routing',
+          id: 'llm-routing', category: 'ai-llm',
           title: 'LLM Model Routing',
           description: 'Routes prompts between cheap and premium models.',
           icon: '🔀',
@@ -232,7 +238,7 @@ describe('App — routes cloud-logging and threat-protection', () => {
       project_id: 'fake-project',
       demos: [
         {
-          id: 'cloud-logging',
+          id: 'cloud-logging', category: 'operations-portals',
           title: 'Cloud Logging',
           description: 'd',
           icon: '🪵',
@@ -264,7 +270,7 @@ describe('App — routes cloud-logging and threat-protection', () => {
       project_id: 'p',
       demos: [
         {
-          id: 'threat-protection',
+          id: 'threat-protection', category: 'security-auth',
           title: 'Threat Protection',
           description: 'd',
           icon: '🧱',

@@ -1,7 +1,19 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Sidebar } from './Sidebar'
+import { CATEGORIES } from '../categories'
+
+const EXPANDED_KEY = 'superdemo:expanded-categories'
+
+/** Seed localStorage so every category starts expanded (sections are collapsed
+ *  by default; most tests want the demo items visible). */
+function expandAllCategories() {
+  window.localStorage.setItem(
+    EXPANDED_KEY,
+    JSON.stringify(CATEGORIES.map((c) => c.id)),
+  )
+}
 
 const demos = [
   {
@@ -10,6 +22,7 @@ const demos = [
     description: 'd1',
     icon: '⏱️',
     status: 'passing' as const,
+    category: 'operations-portals' as const,
   },
   {
     id: 'llm-security',
@@ -17,6 +30,7 @@ const demos = [
     description: 'd2',
     icon: '🛡️',
     status: 'failing' as const,
+    category: 'ai-llm' as const,
   },
 ]
 
@@ -33,10 +47,23 @@ function renderSidebar(overrides: Partial<Parameters<typeof Sidebar>[0]> = {}) {
 }
 
 describe('Sidebar', () => {
+  beforeEach(() => {
+    window.localStorage.clear()
+    expandAllCategories()
+  })
+
   it('renders each demo title', () => {
     renderSidebar()
     expect(screen.getByText('Basic Quota')).toBeInTheDocument()
     expect(screen.getByText('LLM Security v2')).toBeInTheDocument()
+  })
+
+  it('renders a category header for each non-empty category', () => {
+    renderSidebar()
+    expect(screen.getByText('AI & LLM')).toBeInTheDocument()
+    expect(screen.getByText('Operations & Traffic')).toBeInTheDocument()
+    // Categories with no demos are not shown
+    expect(screen.queryByText('Backends & Integration')).not.toBeInTheDocument()
   })
 
   it('marks the active demo as selected via aria-current', () => {
@@ -103,6 +130,7 @@ describe('Sidebar', () => {
           description: 'd',
           icon: '⚡',
           status: 'passing',
+          category: 'ai-llm',
         },
       ],
       showStatus: true,
@@ -120,6 +148,7 @@ describe('Sidebar', () => {
           icon: '🔀',
           status: 'placeholder',
           placeholder: true,
+          category: 'ai-llm',
         },
       ],
       showStatus: true,
@@ -127,6 +156,42 @@ describe('Sidebar', () => {
     expect(
       screen.getByLabelText('Status: not yet implemented'),
     ).toBeInTheDocument()
+  })
+
+  it('collapses every category section by default (demos hidden)', () => {
+    window.localStorage.clear()
+    renderSidebar()
+    // Headers are always visible...
+    expect(screen.getByText('AI & LLM')).toBeInTheDocument()
+    expect(screen.getByText('Operations & Traffic')).toBeInTheDocument()
+    // ...but the demo items under them are hidden until expanded.
+    expect(screen.queryByText('Basic Quota')).not.toBeInTheDocument()
+    expect(screen.queryByText('LLM Security v2')).not.toBeInTheDocument()
+  })
+
+  it('marks a collapsed section header with aria-expanded=false', () => {
+    window.localStorage.clear()
+    renderSidebar()
+    const header = screen.getByRole('button', { name: /AI & LLM/i })
+    expect(header).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('reveals a section’s demos when its header is clicked', async () => {
+    window.localStorage.clear()
+    renderSidebar()
+    expect(screen.queryByText('LLM Security v2')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /AI & LLM/i }))
+    expect(screen.getByText('LLM Security v2')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /AI & LLM/i }),
+    ).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  it('hides a section’s demos again when its header is clicked twice', async () => {
+    renderSidebar() // starts expanded via beforeEach seed
+    expect(screen.getByText('LLM Security v2')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /AI & LLM/i }))
+    expect(screen.queryByText('LLM Security v2')).not.toBeInTheDocument()
   })
 
   it('keeps placeholder rows clickable', async () => {
@@ -140,6 +205,7 @@ describe('Sidebar', () => {
           icon: '🔀',
           status: 'placeholder',
           placeholder: true,
+          category: 'ai-llm',
         },
       ],
       onSelect,

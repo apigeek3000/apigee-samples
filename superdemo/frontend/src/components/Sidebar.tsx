@@ -1,4 +1,6 @@
 import type { DemoMetadata, DemoStatus } from '../types'
+import { groupByCategory } from '../categories'
+import { useCollapsedCategories } from '../hooks/useCollapsedCategories'
 import styles from './Sidebar.module.css'
 
 interface Props {
@@ -34,6 +36,9 @@ export function Sidebar({
   onShowStatusChange,
   isCollapsed = false,
 }: Props) {
+  const groups = groupByCategory(demos)
+  const [isCategoryCollapsed, toggleCategory] = useCollapsedCategories()
+
   return (
     <nav
       className={`${styles.sidebar} ${isCollapsed ? styles.collapsed : ''}`}
@@ -66,31 +71,58 @@ export function Sidebar({
         <div className={styles.empty}>No demos deployed yet.</div>
       )}
 
-      {demos.map((demo) => {
-        const isActive = demo.id === activeDemoId
+      {groups.map(({ category, demos: groupDemos }) => {
+        const collapsed = isCategoryCollapsed(category.id)
         return (
-          <button
-            key={demo.id}
-            type="button"
-            className={`${styles.item} ${isActive ? styles.itemActive : ''}`}
-            aria-current={isActive ? 'page' : undefined}
-            onClick={() => onSelect(demo.id)}
-          >
-            <span className={styles.icon} aria-hidden="true">
-              {demo.icon}
-            </span>
-            <span>{demo.title}</span>
-            {showStatus && (
+          <div key={category.id} className={styles.group}>
+            <button
+              type="button"
+              className={styles.categoryHeader}
+              aria-expanded={!collapsed}
+              onClick={() => toggleCategory(category.id)}
+            >
               <span
-                className={`${styles.statusDot} ${STATUS_DOT_CLASS[demo.status]}`}
-                aria-label={STATUS_LABEL[demo.status]}
-                title={STATUS_LABEL[demo.status]}
-              />
-            )}
-          </button>
+                className={`${styles.categoryChevron} ${
+                  collapsed ? '' : styles.categoryChevronOpen
+                }`}
+                aria-hidden="true"
+              >
+                ▸
+              </span>
+              <span className={styles.categoryIcon} aria-hidden="true">
+                {category.icon}
+              </span>
+              <span>{category.label}</span>
+            </button>
+            {!collapsed &&
+              groupDemos.map((demo) => {
+                const isActive = demo.id === activeDemoId
+                return (
+                  <button
+                    key={demo.id}
+                    type="button"
+                    className={`${styles.item} ${isActive ? styles.itemActive : ''}`}
+                    aria-current={isActive ? 'page' : undefined}
+                    onClick={() => onSelect(demo.id)}
+                  >
+                    <span className={styles.icon} aria-hidden="true">
+                      {demo.icon}
+                    </span>
+                    <span>{demo.title}</span>
+                    {showStatus && (
+                      <span
+                        className={`${styles.statusDot} ${STATUS_DOT_CLASS[demo.status]}`}
+                        aria-label={STATUS_LABEL[demo.status]}
+                        title={STATUS_LABEL[demo.status]}
+                      />
+                    )}
+                  </button>
+                )
+              })}
+          </div>
         )
       })}
-      
+
       <div className={styles.spacer} />
       
       <label className={styles.footer}>

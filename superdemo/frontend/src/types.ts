@@ -1,3 +1,5 @@
+import type { DemoCategory } from './categories'
+
 export type DemoStatus = 'passing' | 'failing' | 'undeployed' | 'unknown' | 'placeholder'
 
 export interface DemoMetadata {
@@ -6,6 +8,8 @@ export interface DemoMetadata {
   description: string
   icon: string
   status: DemoStatus
+  /** Category this demo is grouped under in the sidebar/homepage. Always set by the backend. */
+  category?: DemoCategory
   /** True for sidebar placeholders that are not yet wired up. */
   placeholder?: boolean
   /** Present only on the `llm-security` demo. */

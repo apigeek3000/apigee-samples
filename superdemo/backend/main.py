@@ -150,6 +150,7 @@ DEMO_METADATA = {
         "Trial tier allows 10 requests/minute. "
         "Premium tier allows 1000 requests/hour.",
         "icon": "⏱️",
+        "category": "operations-portals",
     },
     "llm-security": {
         "id": "llm-security",
@@ -157,6 +158,7 @@ DEMO_METADATA = {
         "description": "Routes prompts through Google Cloud Model Armor "
         "for threat protection before forwarding to Vertex AI.",
         "icon": "🛡️",
+        "category": "ai-llm",
     },
     "llm-token-limits-v2": {
         "id": "llm-token-limits-v2",
@@ -167,6 +169,7 @@ DEMO_METADATA = {
             "prompt is sent to both tiers in parallel."
         ),
         "icon": "⚡",
+        "category": "ai-llm",
     },
     "apigee-mcp": {
         "id": "apigee-mcp",
@@ -176,6 +179,7 @@ DEMO_METADATA = {
             "Apigee API hub specs and exposes them to a streaming AI agent."
         ),
         "icon": "🔌",
+        "category": "ai-llm",
     },
     "cloud-logging": {
         "id": "cloud-logging",
@@ -185,6 +189,7 @@ DEMO_METADATA = {
             "Google Cloud Logging on every request."
         ),
         "icon": "🪵",
+        "category": "operations-portals",
     },
     "threat-protection": {
         "id": "threat-protection",
@@ -195,6 +200,7 @@ DEMO_METADATA = {
             "payloads."
         ),
         "icon": "🧱",
+        "category": "security-auth",
     },
     "llm-circuit-breaking": {
         "id": "llm-circuit-breaking",
@@ -205,6 +211,7 @@ DEMO_METADATA = {
             "show which target pool actually served each request."
         ),
         "icon": "🚧",
+        "category": "ai-llm",
     },
     "llm-token-limits-per-user": {
         "id": "llm-token-limits-per-user",
@@ -215,6 +222,7 @@ DEMO_METADATA = {
             "budgets — exhaust one and the other still gets through."
         ),
         "icon": "👤",
+        "category": "ai-llm",
     },
     "llm-semantic-cache-v2": {
         "id": "llm-semantic-cache-v2",
@@ -226,6 +234,7 @@ DEMO_METADATA = {
             "shows the speedup."
         ),
         "icon": "🧠",
+        "category": "ai-llm",
     },
     "llm-routing": {
         "id": "llm-routing",
@@ -234,6 +243,7 @@ DEMO_METADATA = {
             "Routes prompts between cheap and premium models based on policy."
         ),
         "icon": "🔀",
+        "category": "ai-llm",
         "placeholder": True,
     },
     "llm-logging": {
@@ -243,6 +253,7 @@ DEMO_METADATA = {
             "Logs prompt/response pairs through Apigee for audit and analytics."
         ),
         "icon": "📜",
+        "category": "ai-llm",
         "placeholder": True,
     },
     "llm-function-calling": {
@@ -252,6 +263,396 @@ DEMO_METADATA = {
             "Brokers LLM tool/function calls through Apigee with policy enforcement."
         ),
         "icon": "🔧",
+        "category": "ai-llm",
+        "placeholder": True,
+    },
+    # ── AI & LLM (new placeholders) ──────────────────────────────────
+    "llm-inference-gateway": {
+        "id": "llm-inference-gateway",
+        "title": "LLM Inference Gateway",
+        "description": (
+            "Fronts a GKE Inference Gateway with Apigee to build a "
+            "production AI gateway over self-hosted models."
+        ),
+        "icon": "🚪",
+        "category": "ai-llm",
+        "placeholder": True,
+    },
+    "llm-sse-logging": {
+        "id": "llm-sse-logging",
+        "title": "LLM Streaming Logging",
+        "description": (
+            "Extracts and consolidates server-sent events from a streaming "
+            "LLM target and logs them to Cloud Logging."
+        ),
+        "icon": "📡",
+        "category": "ai-llm",
+        "placeholder": True,
+    },
+    "llm-sse-security": {
+        "id": "llm-sse-security",
+        "title": "LLM Streaming Security",
+        "description": (
+            "Applies Model Armor safety checks to streaming (SSE) LLM "
+            "responses as events flow back to the client."
+        ),
+        "icon": "🔒",
+        "category": "ai-llm",
+        "placeholder": True,
+    },
+    "llm-vertexai-agent": {
+        "id": "llm-vertexai-agent",
+        "title": "Vertex AI Agent",
+        "description": (
+            "Proxies a Vertex AI / Dialogflow conversational agent through "
+            "Apigee for auth and governance."
+        ),
+        "icon": "🕵️",
+        "category": "ai-llm",
+        "placeholder": True,
+    },
+    "adk-auto-insurance-agent": {
+        "id": "adk-auto-insurance-agent",
+        "title": "ADK Insurance Agent",
+        "description": (
+            "An Agent Development Kit auto-insurance agent brokered through "
+            "Apigee."
+        ),
+        "icon": "🚗",
+        "category": "ai-llm",
+        "placeholder": True,
+    },
+    # ── Security & Auth (new placeholders) ───────────────────────────
+    "mtls-northbound": {
+        "id": "mtls-northbound",
+        "title": "mTLS (Northbound)",
+        "description": (
+            "Configures client mTLS on the load balancer in front of Apigee "
+            "using a GCP Private CA."
+        ),
+        "icon": "🔐",
+        "category": "security-auth",
+        "placeholder": True,
+    },
+    "mtls-southbound": {
+        "id": "mtls-southbound",
+        "title": "mTLS (Southbound)",
+        "description": (
+            "Configures mTLS from the Apigee proxy to southbound backend "
+            "services."
+        ),
+        "icon": "🔗",
+        "category": "security-auth",
+        "placeholder": True,
+    },
+    "data-deidentification": {
+        "id": "data-deidentification",
+        "title": "Data De-Identification",
+        "description": (
+            "Uses Cloud DLP via Apigee to de-identify sensitive data in "
+            "requests and responses."
+        ),
+        "icon": "🕶️",
+        "category": "security-auth",
+        "placeholder": True,
+    },
+    "cors": {
+        "id": "cors",
+        "title": "CORS",
+        "description": (
+            "Enables cross-origin resource sharing so browser apps on other "
+            "origins can call the API."
+        ),
+        "icon": "🌐",
+        "category": "security-auth",
+        "placeholder": True,
+    },
+    "json-web-tokens": {
+        "id": "json-web-tokens",
+        "title": "JSON Web Tokens",
+        "description": (
+            "Generates, verifies, and decodes JWTs with Apigee's JWT "
+            "policies."
+        ),
+        "icon": "🎫",
+        "category": "security-auth",
+        "placeholder": True,
+    },
+    "oauth-client-credentials": {
+        "id": "oauth-client-credentials",
+        "title": "OAuth Client Credentials",
+        "description": (
+            "Issues OAuth 2.0 tokens via the client-credentials grant type."
+        ),
+        "icon": "🔑",
+        "category": "security-auth",
+        "placeholder": True,
+    },
+    "oauth-client-credentials-with-scope": {
+        "id": "oauth-client-credentials-with-scope",
+        "title": "OAuth Scopes",
+        "description": (
+            "Client-credentials grant with scoped access enforcement."
+        ),
+        "icon": "🗝️",
+        "category": "security-auth",
+        "placeholder": True,
+    },
+    "authorize-idp-access-tokens": {
+        "id": "authorize-idp-access-tokens",
+        "title": "Authorize IdP Tokens",
+        "description": (
+            "Authorizes JWT access tokens issued by an external OIDC identity "
+            "provider."
+        ),
+        "icon": "🪪",
+        "category": "security-auth",
+        "placeholder": True,
+    },
+    # ── Operations & Traffic Management (new placeholders) ───────────
+    "spike-arrest": {
+        "id": "spike-arrest",
+        "title": "Spike Arrest",
+        "description": (
+            "Smooths traffic spikes by throttling request rate to protect "
+            "backends."
+        ),
+        "icon": "🌊",
+        "category": "operations-portals",
+        "placeholder": True,
+    },
+    "basic-caching": {
+        "id": "basic-caching",
+        "title": "Response Caching",
+        "description": (
+            "Caches backend responses and general-purpose objects to cut "
+            "redundant backend calls."
+        ),
+        "icon": "📦",
+        "category": "operations-portals",
+        "placeholder": True,
+    },
+    "apiproduct-operations": {
+        "id": "apiproduct-operations",
+        "title": "API Product Operations",
+        "description": (
+            "Demonstrates operation-level access control on Apigee API "
+            "products."
+        ),
+        "icon": "🧩",
+        "category": "operations-portals",
+        "placeholder": True,
+    },
+    "deploy-apigee-config": {
+        "id": "deploy-apigee-config",
+        "title": "Deploy Config (CI/CD)",
+        "description": (
+            "Pushes Apigee configuration through Cloud Build in a CI/CD "
+            "pipeline."
+        ),
+        "icon": "⚙️",
+        "category": "operations-portals",
+        "placeholder": True,
+    },
+    "deploy-apigee-proxy": {
+        "id": "deploy-apigee-proxy",
+        "title": "Deploy Proxy (CI/CD)",
+        "description": (
+            "Deploys API proxies through Cloud Build in a CI/CD pipeline."
+        ),
+        "icon": "🚀",
+        "category": "operations-portals",
+        "placeholder": True,
+    },
+    "deploy-apigee-sharedflow": {
+        "id": "deploy-apigee-sharedflow",
+        "title": "Deploy Shared Flow (CI/CD)",
+        "description": (
+            "Deploys shared flows through Cloud Build in a CI/CD pipeline."
+        ),
+        "icon": "🔁",
+        "category": "operations-portals",
+        "placeholder": True,
+    },
+    "traffic-mirroring-sharedflow": {
+        "id": "traffic-mirroring-sharedflow",
+        "title": "Traffic Mirroring",
+        "description": (
+            "Shadows requests to a secondary endpoint via a shared flow "
+            "without affecting the primary response."
+        ),
+        "icon": "🪞",
+        "category": "operations-portals",
+        "placeholder": True,
+    },
+    "integrated-developer-portal": {
+        "id": "integrated-developer-portal",
+        "title": "Integrated Portal",
+        "description": (
+            "Stands up Apigee's built-in integrated developer portal for an "
+            "API product."
+        ),
+        "icon": "🏛️",
+        "category": "operations-portals",
+        "placeholder": True,
+    },
+    "drupal-developer-portal": {
+        "id": "drupal-developer-portal",
+        "title": "Drupal Portal",
+        "description": (
+            "Publishes API products to a Drupal-based developer portal."
+        ),
+        "icon": "🧱",
+        "category": "operations-portals",
+        "placeholder": True,
+    },
+    "publish-to-apigee-portal": {
+        "id": "publish-to-apigee-portal",
+        "title": "Publish to Portal",
+        "description": (
+            "Automates publishing API products to a developer portal via "
+            "Cloud Build."
+        ),
+        "icon": "📤",
+        "category": "operations-portals",
+        "placeholder": True,
+    },
+    "apihub-portal-publish": {
+        "id": "apihub-portal-publish",
+        "title": "API hub → Portal",
+        "description": (
+            "Publishes API hub catalog entries to a developer portal."
+        ),
+        "icon": "📚",
+        "category": "operations-portals",
+        "placeholder": True,
+    },
+    # ── Backends & Integration (new placeholders) ────────────────────
+    "cloud-functions": {
+        "id": "cloud-functions",
+        "title": "Cloud Functions",
+        "description": (
+            "Connects an Apigee proxy to a gen2 Cloud Function backend."
+        ),
+        "icon": "🧮",
+        "category": "backends-integration",
+        "placeholder": True,
+    },
+    "cloud-run": {
+        "id": "cloud-run",
+        "title": "Cloud Run",
+        "description": "Fronts a Cloud Run service from an Apigee proxy.",
+        "icon": "🏃",
+        "category": "backends-integration",
+        "placeholder": True,
+    },
+    "composite-api": {
+        "id": "composite-api",
+        "title": "Composite API",
+        "description": (
+            "Aggregates multiple backend calls into a single composite API "
+            "response."
+        ),
+        "icon": "🧬",
+        "category": "backends-integration",
+        "placeholder": True,
+    },
+    "monolith-to-microservices-based-on-paths": {
+        "id": "monolith-to-microservices-based-on-paths",
+        "title": "Monolith → Microservices",
+        "description": (
+            "Uses Apigee as a facade to split a monolith into microservices "
+            "by request path."
+        ),
+        "icon": "🪓",
+        "category": "backends-integration",
+        "placeholder": True,
+    },
+    "exposing-to-internet": {
+        "id": "exposing-to-internet",
+        "title": "Expose to Internet",
+        "description": (
+            "Exposes an Apigee proxy publicly via a global load balancer."
+        ),
+        "icon": "🌍",
+        "category": "backends-integration",
+        "placeholder": True,
+    },
+    "extension-processor-grpc": {
+        "id": "extension-processor-grpc",
+        "title": "Ext Processor (gRPC)",
+        "description": "Uses an Apigee Service Extension processor over gRPC.",
+        "icon": "🧵",
+        "category": "backends-integration",
+        "placeholder": True,
+    },
+    "extension-processor-http": {
+        "id": "extension-processor-http",
+        "title": "Ext Processor (HTTP)",
+        "description": "Uses an Apigee Service Extension processor over HTTP.",
+        "icon": "🧶",
+        "category": "backends-integration",
+        "placeholder": True,
+    },
+    "grpc": {
+        "id": "grpc",
+        "title": "gRPC",
+        "description": "Puts Apigee in front of gRPC backends.",
+        "icon": "📶",
+        "category": "backends-integration",
+        "placeholder": True,
+    },
+    "grpc-web": {
+        "id": "grpc-web",
+        "title": "gRPC-Web",
+        "description": (
+            "Bridges browser gRPC-Web clients to gRPC backends through "
+            "Apigee."
+        ),
+        "icon": "🕸️",
+        "category": "backends-integration",
+        "placeholder": True,
+    },
+    "websockets": {
+        "id": "websockets",
+        "title": "WebSockets",
+        "description": (
+            "Proxies real-time WebSocket connections through Apigee."
+        ),
+        "icon": "🔌",
+        "category": "backends-integration",
+        "placeholder": True,
+    },
+    "extract-variables": {
+        "id": "extract-variables",
+        "title": "Extract Variables",
+        "description": (
+            "Extracts fields from XML/JSON messages into flow variables."
+        ),
+        "icon": "📐",
+        "category": "backends-integration",
+        "placeholder": True,
+    },
+    "java-callout": {
+        "id": "java-callout",
+        "title": "Java Callout",
+        "description": (
+            "Runs custom Java code in the proxy flow via the Java Callout "
+            "policy."
+        ),
+        "icon": "☕",
+        "category": "backends-integration",
+        "placeholder": True,
+    },
+    "property-set": {
+        "id": "property-set",
+        "title": "Property Sets",
+        "description": (
+            "Defines and reads Property Sets for externalized proxy "
+            "configuration."
+        ),
+        "icon": "🗂️",
+        "category": "backends-integration",
         "placeholder": True,
     },
 }

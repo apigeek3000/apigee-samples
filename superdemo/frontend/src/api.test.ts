@@ -214,6 +214,29 @@ describe('fetchDemos', () => {
     })
   })
 
+  it('preserves the category field through normalization', async () => {
+    const fetch = mockFetch()
+    fetch.mockResolvedValueOnce(
+      jsonResponse({
+        status: 'ready',
+        demos: [
+          {
+            id: 'basic-quota',
+            title: 'Basic Quota',
+            description: 'd',
+            icon: '⏱️',
+            status: 'passing',
+            category: 'operations-portals',
+          },
+        ],
+      }),
+    )
+
+    const result = await fetchDemos()
+
+    expect(result.demos[0].category).toBe('operations-portals')
+  })
+
   it('passes placeholder status and placeholder flag through normalization', async () => {
     const fetch = mockFetch()
     fetch.mockResolvedValueOnce(

@@ -72,6 +72,7 @@ function normalizeDemo(raw: unknown): DemoMetadata {
     description: d.description ?? '',
     icon: d.icon ?? '',
     status: normalizeStatus(d.status),
+    category: d.category,
     placeholder: d.placeholder,
     model_name: d.model_name,
     model_armor_region: d.model_armor_region,
