@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+ Copyright 2026 Google LLC
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+      http://www.apache.org/licenses/LICENSE-2.0
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+<ProxyEndpoint name="default">
+  <PreFlow name="PreFlow">
+    <Request>
+      <Step>
+        <Name>VA-VerifyAPIKey</Name>
+      </Step>
+    </Request>
+    <Response/>
+  </PreFlow>
+  <Flows>
+    <Flow name="GenerateContent">
+      <Description>Route to a model chosen by prompt complexity</Description>
+      <Request>
+        <Step>
+          <Name>EV-ExtractPrompt</Name>
+          <Condition>request.content != null</Condition>
+        </Step>
+        <Step>
+          <Name>AM-NormalizePrompt</Name>
+          <Condition>routing_prompt != null</Condition>
+        </Step>
+        <Step>
+          <Name>AM-SelectDefaultModel</Name>
+        </Step>
+        <Step>
+          <Name>KVM-GetRoutingOverride</Name>
+          <Condition>routing_prompt_key != null</Condition>
+        </Step>
+        <Step>
+          <Name>SC-GenerateEmbeddings</Name>
+          <Condition>(routing_prompt != null) and (override_model = null)</Condition>
+        </Step>
+        <Step>
+          <Name>EV-ExtractEmbeddings</Name>
+          <Condition>embeddings_response.content != null</Condition>
+        </Step>
+        <Step>
+          <Name>SC-QueryNearestNeighbor</Name>
+          <Condition>dense_embeddings != null</Condition>
+        </Step>
+        <Step>
+          <Name>EV-ExtractNearestNeighbor</Name>
+          <Condition>nearest_neighbor_response.content != null</Condition>
+        </Step>
+        <Step>
+          <Name>AM-NearestNeighbor</Name>
+          <Condition>nearest_neighbor_distance_ext != null</Condition>
+        </Step>
+        <Step>
+          <Name>AM-SelectSimpleModel</Name>
+          <Condition>nearest_neighbor_distance != null</Condition>
+        </Step>
+        <Step>
+          <Name>AM-SelectComplexModel</Name>
+          <Condition>(nearest_neighbor_distance != null) and (nearest_neighbor_distance GreaterThan propertyset.vertex_config.routing_min_similarity)</Condition>
+        </Step>
+        <Step>
+          <Name>AM-SelectOverrideModel</Name>
+          <Condition>override_model != null</Condition>
+        </Step>
+      </Request>
+      <Response/>
+      <Condition>(proxy.pathsuffix MatchesPath "/v1/projects/*/locations/*/publishers/google/models/*") and (request.verb = "POST")</Condition>
+    </Flow>
+  </Flows>
+  <PostFlow name="PostFlow">
+    <Request/>
+    <Response>
+      <Step>
+        <Name>AM-SetRoutingHeaders</Name>
+      </Step>
+    </Response>
+  </PostFlow>
+  <HTTPProxyConnection>
+    <Properties/>
+    <BasePath>/v1/samples/llm-intelligent-routing</BasePath>
+  </HTTPProxyConnection>
+  <RouteRule name="default">
+    <TargetEndpoint>default</TargetEndpoint>
+  </RouteRule>
+</ProxyEndpoint>

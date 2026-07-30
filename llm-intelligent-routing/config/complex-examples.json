@@ -1,0 +1,76 @@
+{
+  "examples": [
+    {
+      "id": "complex_multistep_reasoning_01",
+      "text": "Given these three quarterly reports, identify which business segments drove the change in gross margin and explain the causal chain step by step."
+    },
+    {
+      "id": "complex_multistep_reasoning_02",
+      "text": "Our checkout conversion dropped 12% after the March release. Work backwards through the funnel and tell me which changes could plausibly explain it and how to distinguish between them."
+    },
+    {
+      "id": "complex_multistep_reasoning_03",
+      "text": "If we shift half of our batch workloads to spot instances, trace the downstream effects on cost, reliability, and on-call burden, and tell me where the second-order risks are."
+    },
+    {
+      "id": "complex_code_architecture_01",
+      "text": "Refactor this service into a hexagonal architecture and explain the trade-offs of each boundary you draw."
+    },
+    {
+      "id": "complex_code_architecture_02",
+      "text": "We have a distributed monolith with circular dependencies between four services. Propose a decomposition strategy, the order to execute it in, and how to keep the system releasable throughout."
+    },
+    {
+      "id": "complex_code_architecture_03",
+      "text": "Review this event-sourced aggregate for consistency violations under concurrent writes and propose a fix that preserves the existing event history."
+    },
+    {
+      "id": "complex_document_synthesis_01",
+      "text": "Read these five vendor contracts and produce a comparison of termination clauses, liability caps, and data residency commitments, flagging anywhere the terms conflict with each other."
+    },
+    {
+      "id": "complex_document_synthesis_02",
+      "text": "Synthesize the findings across these research papers into a coherent narrative, noting where the authors disagree and which claims are supported by the strongest evidence."
+    },
+    {
+      "id": "complex_document_synthesis_03",
+      "text": "Summarize this 200-page regulatory filing into an executive brief that preserves every obligation with a compliance deadline."
+    },
+    {
+      "id": "complex_ambiguous_requirements_01",
+      "text": "The stakeholder wants the dashboard to feel faster but has not defined faster. Enumerate the plausible interpretations, what each would cost to build, and how you would decide between them."
+    },
+    {
+      "id": "complex_ambiguous_requirements_02",
+      "text": "Turn this vague feature request into a specification, listing every assumption you had to make and which ones need confirmation before implementation starts."
+    },
+    {
+      "id": "complex_ambiguous_requirements_03",
+      "text": "We need to support enterprise customers. Work out what that actually implies for authentication, auditing, data isolation, and support commitments, and rank the work by risk."
+    },
+    {
+      "id": "complex_math_proof_01",
+      "text": "Prove that this scheduling algorithm terminates and derive its worst-case time complexity, showing each step of the argument."
+    },
+    {
+      "id": "complex_math_proof_02",
+      "text": "Derive the closed-form expression for the expected queue depth under this arrival process and explain which assumptions the derivation depends on."
+    },
+    {
+      "id": "complex_math_proof_03",
+      "text": "Show whether this distributed consensus protocol satisfies safety under an asynchronous network with one crash failure, and construct a counterexample if it does not."
+    },
+    {
+      "id": "complex_tradeoff_analysis_01",
+      "text": "Compare building this in-house against three vendor options across cost, time to market, lock-in, and operational risk, and make a recommendation with the reasoning made explicit."
+    },
+    {
+      "id": "complex_tradeoff_analysis_02",
+      "text": "We can improve latency, reduce cost, or increase reliability but not all three this quarter. Analyze the trade space and recommend which to pursue given a growth-stage company."
+    },
+    {
+      "id": "complex_tradeoff_analysis_03",
+      "text": "Evaluate migrating from a relational store to an event-driven architecture for this workload, including the cases where the migration would be the wrong call."
+    }
+  ]
+}

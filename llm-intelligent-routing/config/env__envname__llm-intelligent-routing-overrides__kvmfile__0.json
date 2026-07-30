@@ -1,0 +1,16 @@
+{
+  "keyValueEntries": [
+    {
+      "name": "ping",
+      "value": "SIMPLE_MODEL"
+    },
+    {
+      "name": "summarize this in one sentence.",
+      "value": "SIMPLE_MODEL"
+    },
+    {
+      "name": "draft our incident postmortem for the march outage.",
+      "value": "COMPLEX_MODEL"
+    }
+  ]
+}
