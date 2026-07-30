@@ -32,19 +32,17 @@ check_shell_variables PROJECT_ID \
   EMBEDDINGS_MODEL_ID \
   ROUTING_MIN_SIMILARITY
 
-check_required_commands gcloud jq curl sed
+check_required_commands gcloud jq curl
 
 [[ -z "$TOKEN" ]] && TOKEN=$(gcloud auth print-access-token)
 
 insure_apigeecli
-get_sedi_args sedi_args
 
 proxy_name="llm-intelligent-routing-v1"
 product_name="llm-intelligent-routing-product"
 dev_moniker="llm-intelligent-routing-developer"
 app_name="llm-intelligent-routing-app"
 dev_email="${dev_moniker}@acme.com"
-kvm_name="llm-intelligent-routing-overrides"
 index_display_name="llm-routing-index"
 index_endpoint_display_name="llm-routing-index-endpoint"
 deployed_index_id="llm_routing_index_endpoint_deployment"
@@ -137,21 +135,6 @@ index_endpoint_subdomain=$PUBLIC_ENDPOINT_SUBDOMAIN
 index_id_name=$deployed_index_id
 routing_min_similarity=$ROUTING_MIN_SIMILARITY
 EOF
-
-# --- Overrides KVM --------------------------------------------------
-
-if apigeecli kvms list -e "${APIGEE_ENV}" -o "$PROJECT_ID" --token "$TOKEN" | jq -e 'any(. == "'"$kvm_name"'")' >/dev/null; then
-  printf "\nThe KVM %s already exists...\n" "$kvm_name"
-else
-  echo "Importing the routing overrides KVM"
-  json_file="${scriptdir}/config/env__${APIGEE_ENV}__${kvm_name}__kvmfile__0.json"
-  cp "${scriptdir}/config/env__envname__${kvm_name}__kvmfile__0.json" "$json_file"
-  # shellcheck disable=SC2154
-  sed "${sedi_args[@]}" "s/SIMPLE_MODEL/$SIMPLE_MODEL/g" "$json_file"
-  sed "${sedi_args[@]}" "s/COMPLEX_MODEL/$COMPLEX_MODEL/g" "$json_file"
-  apigeecli kvms import -f "$json_file" --org "$PROJECT_ID" --token "$TOKEN" 2>/dev/null
-  rm "$json_file"
-fi
 
 # --- Proxy, product, developer, app ---------------------------------
 

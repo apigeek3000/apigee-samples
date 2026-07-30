@@ -25,7 +25,7 @@ check_shell_variables PROJECT_ID \
   REGION \
   SERVICE_ACCOUNT_NAME
 
-check_required_commands gcloud jq curl sed
+check_required_commands gcloud jq curl
 
 # shellcheck disable=SC2034
 TOKEN=$(gcloud auth print-access-token)
@@ -37,12 +37,10 @@ product_name="llm-intelligent-routing-product"
 dev_moniker="llm-intelligent-routing-developer"
 app_name="llm-intelligent-routing-app"
 dev_email="${dev_moniker}@acme.com"
-kvm_name="llm-intelligent-routing-overrides"
 
 delete_app_if_necessary "$app_name" "$PROJECT_ID" "$dev_email"
 delete_developer_if_necessary "$dev_email" "$PROJECT_ID"
 delete_product_if_necessary "$product_name" "$PROJECT_ID"
-delete_kvm_if_necessary "$kvm_name" "$PROJECT_ID" "$APIGEE_ENV"
 delete_apiproxy "${proxy_name}" "$PROJECT_ID"
 
 # shellcheck disable=SC2034

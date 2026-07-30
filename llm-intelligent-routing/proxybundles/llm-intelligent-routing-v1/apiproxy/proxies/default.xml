@@ -29,19 +29,11 @@
           <Condition>request.content != null</Condition>
         </Step>
         <Step>
-          <Name>AM-NormalizePrompt</Name>
-          <Condition>routing_prompt != null</Condition>
-        </Step>
-        <Step>
           <Name>AM-SelectDefaultModel</Name>
         </Step>
         <Step>
-          <Name>KVM-GetRoutingOverride</Name>
-          <Condition>routing_prompt_key != null</Condition>
-        </Step>
-        <Step>
           <Name>SC-GenerateEmbeddings</Name>
-          <Condition>(routing_prompt != null) and (override_model = null)</Condition>
+          <Condition>routing_prompt != null</Condition>
         </Step>
         <Step>
           <Name>EV-ExtractEmbeddings</Name>
@@ -66,10 +58,6 @@
         <Step>
           <Name>AM-SelectComplexModel</Name>
           <Condition>(nearest_neighbor_distance != null) and (nearest_neighbor_distance GreaterThan propertyset.vertex_config.routing_min_similarity)</Condition>
-        </Step>
-        <Step>
-          <Name>AM-SelectOverrideModel</Name>
-          <Condition>override_model != null</Condition>
         </Step>
       </Request>
       <Response/>

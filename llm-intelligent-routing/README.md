@@ -15,18 +15,15 @@ A prompt that lands far from all of them is not. Flash is the default; Pro is th
 ```mermaid
 flowchart TD
     A[Client POSTs to .../models/auto:generateContent] --> B[VerifyAPIKey]
-    B --> C[Extract + normalize last user message]
-    C --> D{KVM override hit?}
-    D -- yes --> H[Use the pinned model]
-    D -- no --> E[Embed with text-embedding-005]
+    B --> C[Extract the last user message]
+    C --> E[Embed with text-embedding-005]
     E --> F[findNeighbors, neighbor_count 1]
     F --> G{Distance above threshold?}
     G -- yes --> I[Route to the complex model]
     G -- no --> J[Route to the simple model]
     E -. call fails .-> J
     F -. call fails .-> J
-    H --> K[Vertex AI generateContent]
-    I --> K
+    I --> K[Vertex AI generateContent]
     J --> K
 ```
 
@@ -69,7 +66,7 @@ curl -i --location \
 | Header | Meaning |
 | --- | --- |
 | `x-routing-selected-model` | The model the request was actually sent to |
-| `x-routing-reason` | One of `kvm_override`, `complex_match`, `no_complex_match`, `classifier_unavailable` |
+| `x-routing-reason` | One of `complex_match`, `no_complex_match`, `classifier_unavailable` |
 | `x-routing-distance` | The nearest-neighbor distance, or `n/a` when no search ran |
 
 ### Tuning the router
@@ -82,14 +79,6 @@ rather than duplicate.
 `ROUTING_MIN_SIMILARITY` in [env.sh](env.sh) is the decision boundary. **The default of
 `0.75` is a starting point, not a validated constant.** The notebook prints a table of real
 distances for a range of prompts — use it to pick a value that separates your traffic.
-
-### Pinning specific prompts
-
-[config/env\_\_envname\_\_llm-intelligent-routing-overrides\_\_kvmfile\_\_0.json](config/env__envname__llm-intelligent-routing-overrides__kvmfile__0.json)
-seeds a KVM of exact prompt→model pins. A hit short-circuits the embedding call entirely,
-which saves a round trip for known-hot prompts. Keys are matched after lowercasing and
-trimming, so they must be written lowercase. Matching is exact — punctuation differences
-will not match.
 
 ### Scope
 
