@@ -68,9 +68,9 @@ curl -i --location \
 
 | Header | Meaning |
 | --- | --- |
-| `x-apigee-selected-model` | The model the request was actually sent to |
-| `x-apigee-routing-reason` | One of `kvm_override`, `complex_match`, `no_complex_match`, `classifier_unavailable` |
-| `x-apigee-routing-distance` | The nearest-neighbor distance, or `n/a` when no search ran |
+| `x-routing-selected-model` | The model the request was actually sent to |
+| `x-routing-reason` | One of `kvm_override`, `complex_match`, `no_complex_match`, `classifier_unavailable` |
+| `x-routing-distance` | The nearest-neighbor distance, or `n/a` when no search ran |
 
 ### Tuning the router
 

@@ -70,6 +70,15 @@ ACCESS_TOKEN=$(gcloud auth print-access-token) && curl --location --request POST
 gcloud ai index-endpoints create --display-name=llm-routing-index-endpoint --public-endpoint-enabled --region=$REGION --project=$PROJECT_ID
 ```
 
+**Note:** index creation in step 1 is asynchronous — the `curl` returns a long-running
+operation, not the finished index, and the index takes a few minutes to appear. The next step
+looks the index up by display name, so run it too early and the lookup returns nothing and
+`gcloud` fails with `could not parse resource []`. Wait until both resources are listed:
+
+```sh
+gcloud ai indexes list --project=$PROJECT_ID --region=$REGION --format="table(name,displayName)" && gcloud ai index-endpoints list --project=$PROJECT_ID --region=$REGION --format="table(name,displayName)"
+```
+
 ### 3. Deploy the index to the endpoint
 
 ```sh

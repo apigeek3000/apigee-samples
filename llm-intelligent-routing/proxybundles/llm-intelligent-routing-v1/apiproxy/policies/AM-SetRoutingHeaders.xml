@@ -16,9 +16,9 @@
   <Properties/>
   <Set>
     <Headers>
-      <Header name="x-apigee-selected-model">{selected_model}</Header>
-      <Header name="x-apigee-routing-reason">{routing_reason}</Header>
-      <Header name="x-apigee-routing-distance">{routing_distance_display}</Header>
+      <Header name="x-routing-selected-model">{selected_model}</Header>
+      <Header name="x-routing-reason">{routing_reason}</Header>
+      <Header name="x-routing-distance">{routing_distance_display}</Header>
     </Headers>
   </Set>
   <AssignTo createNew="false" type="response"/>
