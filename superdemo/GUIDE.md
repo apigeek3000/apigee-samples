@@ -124,12 +124,12 @@ deltas, tool calls, and tool results live with active agent badges.
    Tools**) lists every tool the agent has pulled from API hub — point out
    that nothing is hard-coded; publish a new spec and it appears here.
 2. Click a routine canned prompt (e.g., *"Get details for customer 1234"*).
-   The chat shows the `⚡ Fast Assistant (Gemini Flash)` badge, a `→ tool(...)`
+   The chat shows the `Fast Assistant (Gemini Flash)` badge, a `→ tool(...)`
    bubble for the outbound call Apigee brokers, a `← 200 · {...}` bubble for the
    response, and the streaming natural-language summary.
 3. Click a complex analysis prompt (e.g., *"Perform a detailed risk and dispute analysis..."*).
    The audience sees the coordinator dynamically route the inquiry to the
-   `🧠 Pro Specialist (Gemini Pro)` agent.
+   `Pro Specialist (Gemini Pro)` agent.
 4. (Optional) Type a freeform prompt to show the agent reasoning over
    which tools to call and delegating between models based on complexity.
 

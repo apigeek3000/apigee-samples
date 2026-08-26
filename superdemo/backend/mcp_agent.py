@@ -46,7 +46,7 @@ ChatEvent = Dict[str, Any]
 """
 
 
-def _tool_response_to_body(response: Any) -> Tuple[bool, str]:
+def _tool_response_to_body(response: Any, name: str = "") -> Tuple[bool, str]:
     """Reduce an ADK ``function_response.response`` payload to (is_error, body).
 
     MCP tool results arrive as a dumped ``CallToolResult``::
@@ -60,6 +60,8 @@ def _tool_response_to_body(response: Any) -> Tuple[bool, str]:
     *something* meaningful rather than an empty body.
     """
     if not isinstance(response, dict):
+        if response is None and name == "transfer_to_agent":
+            return False, '{"result": "success"}'
         return False, "" if response is None else str(response)
 
     # ADK's run_async wrapper converts MCP transport failures into this shape.
@@ -83,6 +85,10 @@ def _tool_response_to_body(response: Any) -> Tuple[bool, str]:
     structured = response.get("structuredContent")
     if structured is not None:
         return is_error, json.dumps(structured)
+
+    # ADK's transfer_to_agent returns {"result": None}. Surface {"result": "success"}.
+    if response == {"result": None} or response == {"result": ""}:
+        return False, '{"result": "success"}'
 
     # Unknown shape — surface the raw payload rather than an empty bubble.
     return is_error, json.dumps(response)
@@ -129,7 +135,8 @@ def adk_event_to_chat_events(event: Any) -> Iterator[ChatEvent]:
 
         resp = getattr(part, "function_response", None)
         if resp is not None:
-            is_error, body = _tool_response_to_body(getattr(resp, "response", None))
+            resp_name = getattr(resp, "name", "")
+            is_error, body = _tool_response_to_body(getattr(resp, "response", None), name=resp_name)
             resp_dict: ChatEvent = {
                 "type": "tool_result",
                 "id": getattr(resp, "id", ""),

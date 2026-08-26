@@ -213,23 +213,32 @@ export const demoInfo: Record<string, DemoInfo> = {
   },
   'apigee-mcp': {
     diagram: `flowchart LR
-  Agent[ADK Agent]
-  Vertex[(Vertex AI)]
+  User([User Request])
+  subgraph Agents["ADK Multi-Agent"]
+    direction TB
+    Orch["Orchestrator<br/>(Gemini Flash)"]
+    Flash["Fast Assistant<br/>(Gemini Flash)"]
+    Pro["Pro Specialist<br/>(Gemini Pro)"]
+    Orch -- "routine" --> Flash
+    Orch -- "complex" --> Pro
+  end
   subgraph Apigee["Apigee"]
     direction TB
     MCPProxy[crm-mcp-proxy]
     Specs[mcp-spec-tools]
     Tools[customers-api]
+    Hub[(API Hub)]
   end
   MCP["MCP Server<br/>(Cloud Run)"]
-  Hub[(API hub)]
   Backend[("CRM API<br/>(Cloud Run)")]
-  Agent <--> Vertex
-  Agent -- "x-api-key" --> MCPProxy <--> MCP
+  User --> Orch
+  Flash -- "x-api-key" --> MCPProxy
+  Pro -- "x-api-key" --> MCPProxy
+  MCPProxy <--> MCP
   MCP -- "1. discover" --> Specs --> Hub
   MCP -- "2. invoke" --> Tools --> Backend`,
     description:
-      'The MCP server runs on Cloud Run; the agent never talks to it directly. Three Apigee proxies sit in between: one fronts the MCP server (API-key auth), one surfaces API hub specs for tool discovery, and one fronts the actual backend each tool calls. Apigee is the trust boundary on every hop.',
+      'The ADK Orchestrator (Gemini Flash) triage agent receives the user request and dynamically delegates to either the Fast Assistant (Gemini Flash) for routine inquiries or the Pro Specialist (Gemini Pro) for complex analysis. Both sub-agents talk to the Cloud Run MCP server through Apigee using API-key authentication. Apigee surfaces API Hub OpenAPI specs for dynamic tool discovery and securely fronts the backend CRM API that tools execute.',
     policyLinks: [
       {
         label: 'VerifyAPIKey',

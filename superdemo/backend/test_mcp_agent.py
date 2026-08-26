@@ -172,6 +172,23 @@ def test_function_response_falls_back_to_structured_content():
     }]
 
 
+def test_function_response_transfer_to_agent_null_result():
+    event = _FakeEvent([
+        _FakePart(function_response=_FakeFunctionResponse(
+            name="transfer_to_agent",
+            response={"result": None},
+            id="call-x",
+        ))
+    ])
+    result = list(adk_event_to_chat_events(event))
+    assert result == [{
+        "type": "tool_result",
+        "id": "call-x",
+        "is_error": False,
+        "body": '{"result": "success"}',
+    }]
+
+
 def test_mixed_parts_emit_in_order():
     event = _FakeEvent([
         _FakePart(text="I'll look that up."),

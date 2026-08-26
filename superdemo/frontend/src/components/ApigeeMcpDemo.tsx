@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { marked } from 'marked'
 import type { DemoMetadata, McpTool, McpChatEvent } from '../types'
 import { MoreInfo } from './MoreInfo'
 import { fetchMcpTools, streamMcpChat } from '../api'
@@ -31,25 +32,44 @@ type DisplayMessage =
     }
   | { kind: 'error'; text: string; id: string }
 
+function renderMarkdown(raw: string): string {
+  try {
+    return marked.parse(raw, { async: false, breaks: true, gfm: true }) as string
+  } catch {
+    return raw
+  }
+}
+
+function formatToolResultBody(body: string): string {
+  if (
+    body === '{"result": null}' ||
+    body === '{"result":null}' ||
+    body === '{"result": ""}' ||
+    body === '{"result":""}'
+  ) {
+    return '{"result": "success"}'
+  }
+  return body
+}
+
 function renderAgentBadge(agent?: string) {
   if (!agent) return null
   if (agent === 'complex_analyst') {
-    return <span className={styles.agentBadgePro}>🧠 Pro Specialist (Gemini Pro)</span>
+    return <span className={styles.agentBadgePro}>Pro Specialist (Gemini Pro)</span>
   }
   if (agent === 'standard_assistant') {
-    return <span className={styles.agentBadgeFlash}>⚡ Fast Assistant (Gemini Flash)</span>
+    return <span className={styles.agentBadgeFlash}>Fast Assistant (Gemini Flash)</span>
   }
   if (agent === 'root_coordinator') {
-    return <span className={styles.agentBadgeRoot}>🎯 Coordinator</span>
+    return <span className={styles.agentBadgeRoot}>Coordinator</span>
   }
-  return <span className={styles.agentBadgeGeneric}>🤖 {agent}</span>
+  return <span className={styles.agentBadgeGeneric}>{agent}</span>
 }
 
 const CANNED_PROMPTS = [
   'Get details for customer 1234',
   'Create a customer named Acme Corp',
-  'Perform a detailed risk and dispute analysis for customer 1234',
-  'Analyze account anomalies and reconcile billing history for customer 1234',
+  'Perform a detailed risk analysis for customer 1234',
 ]
 
 const SESSION_KEY = 'apigee-mcp-session'
@@ -235,7 +255,10 @@ export function ApigeeMcpDemo({ demo, projectId }: Props) {
                 return (
                   <div key={msg.id} className={styles.bubbleAssistant}>
                     {renderAgentBadge(msg.agent)}
-                    <div>{msg.text}</div>
+                    <div
+                      className={styles.markdownContent}
+                      dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.text) }}
+                    />
                   </div>
                 )
               }
@@ -254,7 +277,7 @@ export function ApigeeMcpDemo({ demo, projectId }: Props) {
                       msg.isError ? styles.bubbleToolError : ''
                     }`}
                   >
-                    ← {msg.body}
+                    ← {formatToolResultBody(msg.body)}
                   </div>
                 )
               }
