@@ -107,34 +107,38 @@ attached to the key.
 
 **What it shows:** Apigee acting as an MCP server that dynamically
 discovers tools from Apigee API hub specs and exposes them to a streaming
-agent. The user chats with an agent, the agent calls Apigee-brokered
-tools, and the UI streams the deltas, tool calls, and tool results live.
+agent. The backend uses ADK multi-agent routing to triage between Gemini Flash
+(for routine queries) and Gemini Pro (for complex analysis) while executing
+Apigee-brokered tools. The user chats with the agent, and the UI streams
+deltas, tool calls, and tool results live with active agent badges.
 
 **Backend routes:**
-- `GET  /api/mcp/tools` — lists tools discovered from API hub specs.
-- `POST /api/mcp/chat`  — Server-Sent Events stream of `delta`,
-  `tool_call`, `tool_result`, `error`, `done` events. Sessions are keyed
-  by a UUID stored in `sessionStorage`.
+- `GET  /api/proxy/apigee-mcp/tools` — lists tools discovered from API hub specs.
+- `POST /api/proxy/apigee-mcp/chat`  — Server-Sent Events stream of `delta`,
+  `tool_call`, `tool_result`, `error`, `done` events with agent provenance. Sessions
+  are keyed by a UUID stored in `sessionStorage`.
 
 **Demo path:**
 
 1. Select **MCP Server** in the sidebar. The left rail (**Discovered
    Tools**) lists every tool the agent has pulled from API hub — point out
    that nothing is hard-coded; publish a new spec and it appears here.
-2. Click the canned prompts. The chat shows the
-   user message, a `→ tool(...)` bubble for the outbound call Apigee
-   brokers, a `← 200 · {...}` bubble for the response, and then the
-   assistant streams a natural-language summary token by token.
-3. Click a different prompt — the audience sees the
-   agent pick a different tool from the same discovered list.
+2. Click a routine canned prompt (e.g., *"Get details for customer 1234"*).
+   The chat shows the `⚡ Fast Assistant (Gemini Flash)` badge, a `→ tool(...)`
+   bubble for the outbound call Apigee brokers, a `← 200 · {...}` bubble for the
+   response, and the streaming natural-language summary.
+3. Click a complex analysis prompt (e.g., *"Perform a detailed risk and dispute analysis..."*).
+   The audience sees the coordinator dynamically route the inquiry to the
+   `🧠 Pro Specialist (Gemini Pro)` agent.
 4. (Optional) Type a freeform prompt to show the agent reasoning over
-   which tools to call.
+   which tools to call and delegating between models based on complexity.
 
-**Talking points:** tool discovery, session continuity, and streaming are
-all server-side concerns Apigee handles — the browser is a thin renderer.
-If a session is dropped, the backend sends `session_restarted`, the UI
-clears history, and the next prompt starts a fresh conversation under the
-same id.
+**Talking points:** tool discovery, session continuity, streaming, and model
+delegation are all server-side concerns Apigee and the backend handle — the
+browser is a thin renderer. Routine tasks stay fast and cost-efficient on Flash,
+while complex reasoning routes to Pro. If a session is dropped, the backend sends
+`session_restarted`, the UI clears history, and the next prompt starts a fresh
+conversation under the same id.
 
 ---
 

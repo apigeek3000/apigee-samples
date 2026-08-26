@@ -12,13 +12,14 @@ interface Props {
 
 type DisplayMessage =
   | { kind: 'user'; text: string; id: string }
-  | { kind: 'assistant'; text: string; id: string }
+  | { kind: 'assistant'; text: string; id: string; agent?: string }
   | {
       kind: 'tool_call'
       callId: string
       name: string
       args: Record<string, unknown>
       id: string
+      agent?: string
     }
   | {
       kind: 'tool_result'
@@ -26,12 +27,29 @@ type DisplayMessage =
       isError: boolean
       body: string
       id: string
+      agent?: string
     }
   | { kind: 'error'; text: string; id: string }
+
+function renderAgentBadge(agent?: string) {
+  if (!agent) return null
+  if (agent === 'complex_analyst') {
+    return <span className={styles.agentBadgePro}>🧠 Pro Specialist (Gemini Pro)</span>
+  }
+  if (agent === 'standard_assistant') {
+    return <span className={styles.agentBadgeFlash}>⚡ Fast Assistant (Gemini Flash)</span>
+  }
+  if (agent === 'root_coordinator') {
+    return <span className={styles.agentBadgeRoot}>🎯 Coordinator</span>
+  }
+  return <span className={styles.agentBadgeGeneric}>🤖 {agent}</span>
+}
 
 const CANNED_PROMPTS = [
   'Get details for customer 1234',
   'Create a customer named Acme Corp',
+  'Perform a detailed risk and dispute analysis for customer 1234',
+  'Analyze account anomalies and reconcile billing history for customer 1234',
 ]
 
 const SESSION_KEY = 'apigee-mcp-session'
@@ -107,11 +125,14 @@ export function ApigeeMcpDemo({ demo, projectId }: Props) {
       case 'delta':
         setMessages((prev) => {
           const last = prev[prev.length - 1]
-          if (last && last.kind === 'assistant') {
+          if (last && last.kind === 'assistant' && last.agent === event.agent) {
             const updated: DisplayMessage = { ...last, text: last.text + event.text }
             return [...prev.slice(0, -1), updated]
           }
-          return [...prev, { kind: 'assistant', text: event.text, id: nextMessageId() }]
+          return [
+            ...prev,
+            { kind: 'assistant', text: event.text, id: nextMessageId(), agent: event.agent },
+          ]
         })
         break
       case 'tool_call':
@@ -121,6 +142,7 @@ export function ApigeeMcpDemo({ demo, projectId }: Props) {
           name: event.name,
           args: event.args,
           id: nextMessageId(),
+          agent: event.agent,
         })
         break
       case 'tool_result':
@@ -130,6 +152,7 @@ export function ApigeeMcpDemo({ demo, projectId }: Props) {
           isError: event.is_error,
           body: event.body,
           id: nextMessageId(),
+          agent: event.agent,
         })
         break
       case 'error':
@@ -211,7 +234,8 @@ export function ApigeeMcpDemo({ demo, projectId }: Props) {
               if (msg.kind === 'assistant') {
                 return (
                   <div key={msg.id} className={styles.bubbleAssistant}>
-                    {msg.text}
+                    {renderAgentBadge(msg.agent)}
+                    <div>{msg.text}</div>
                   </div>
                 )
               }

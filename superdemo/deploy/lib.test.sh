@@ -38,6 +38,7 @@ echo "build_secret_payload: writes nested-shape superdemo-config JSON"
   export BASIC_QUOTA_STATUS="passing"
   export LLM_SECURITY_KEY="llm-key-789"
   export MODEL_NAME="gemini-fake"
+  export PRO_MODEL_NAME="gemini-fake"
   export MODEL_ARMOR_REGION="us-central1"
   export LLM_SECURITY_STATUS="failing"
   export LLM_TOKEN_LIMITS_BRONZE_KEY="bronze-key-001"
@@ -96,6 +97,7 @@ echo "build_secret_payload: writes nested-shape superdemo-config JSON"
       "client_id": "mcp-key-001",
       "client_secret": "mcp-secret-002",
       "model": "gemini-fake",
+      "pro_model": "gemini-fake",
       "region": "us-east1",
       "status": "passing"
     },

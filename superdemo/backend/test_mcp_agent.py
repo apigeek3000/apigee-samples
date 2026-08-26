@@ -46,8 +46,10 @@ class _FakeContent:
 
 
 class _FakeEvent:
-    def __init__(self, parts):
+    def __init__(self, parts, author=None):
         self.content = _FakeContent(parts)
+        if author is not None:
+            self.author = author
 
 
 def test_text_part_becomes_delta_event():
@@ -266,3 +268,50 @@ def test_get_or_build_toolset_rebuilds_when_key_changes():
         _get_or_build_toolset(_fake_config(client_id="key-a"))
         _get_or_build_toolset(_fake_config(client_id="key-b"))
     assert mock_build.call_count == 2
+
+
+# ── Multi-Agent hierarchy tests ──────────────────────────────────────
+
+
+def test_event_with_author_includes_agent_name():
+    event = _FakeEvent(
+        [_FakePart(text="Analyzing complex case...")],
+        author="complex_analyst",
+    )
+    result = list(adk_event_to_chat_events(event))
+    assert result == [{
+        "type": "delta",
+        "text": "Analyzing complex case...",
+        "agent": "complex_analyst",
+    }]
+
+
+def test_build_agent_creates_multi_agent_hierarchy():
+    from unittest.mock import MagicMock
+    from mcp_agent import _build_agent, McpConfig
+
+    mock_toolset = MagicMock()
+    config = McpConfig(
+        mcp_endpoint="https://example.test/sse",
+        client_id="key-a",
+        model="gemini-2.5-flash",
+        region="us-central1",
+        project_id="fake-project",
+        pro_model="gemini-2.5-pro",
+        flash_model="gemini-2.5-flash",
+    )
+
+    with patch("mcp_agent._configure_vertex_env"):
+        root_agent = _build_agent(config, mock_toolset)
+
+    assert root_agent.name == "root_coordinator"
+    assert root_agent.model == "gemini-2.5-flash"
+    assert hasattr(root_agent, "sub_agents")
+    assert len(root_agent.sub_agents) == 2
+
+    sub_names = {sa.name: sa for sa in root_agent.sub_agents}
+    assert "standard_assistant" in sub_names
+    assert "complex_analyst" in sub_names
+
+    assert sub_names["standard_assistant"].model == "gemini-2.5-flash"
+    assert sub_names["complex_analyst"].model == "gemini-2.5-pro"

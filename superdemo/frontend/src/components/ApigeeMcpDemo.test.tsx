@@ -184,6 +184,22 @@ describe('ApigeeMcpDemo (chat)', () => {
     expect(screen.queryByText('First answer.')).not.toBeInTheDocument()
     expect(screen.getByText('second')).toBeInTheDocument()
   })
+
+  it('renders agent badges for multi-agent delegation', async () => {
+    mockChatStream([
+      { type: 'delta', text: 'Triage complete.', agent: 'root_coordinator' },
+      { type: 'delta', text: 'Performing in-depth analysis…', agent: 'complex_analyst' },
+      { type: 'done' },
+    ])
+    render(<ApigeeMcpDemo demo={MCP_DEMO} />)
+    fireEvent.change(screen.getByPlaceholderText(/Ask the agent/i), {
+      target: { value: 'Analyze account dispute' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Send/i }))
+
+    await waitFor(() => screen.getByText(/Performing in-depth analysis/))
+    expect(screen.getByText(/Pro Specialist/i)).toBeInTheDocument()
+  })
 })
 
 describe('ApigeeMcpDemo (canned prompts)', () => {
@@ -200,9 +216,11 @@ describe('ApigeeMcpDemo (canned prompts)', () => {
     expect(input.value).toBe('Get details for customer 1234')
   })
 
-  it('renders both canned prompts', () => {
+  it('renders all canned prompts including Pro specialist prompts', () => {
     render(<ApigeeMcpDemo demo={MCP_DEMO} />)
     expect(screen.getByRole('button', { name: /Get details for customer 1234/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Create a customer named Acme/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Perform a detailed risk and dispute analysis/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Analyze account anomalies/i })).toBeInTheDocument()
   })
 })

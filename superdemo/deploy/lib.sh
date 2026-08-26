@@ -240,6 +240,7 @@ build_secret_payload() {
     --arg mcp_client_id     "$MCP_CLIENT_ID" \
     --arg mcp_client_secret "$MCP_CLIENT_SECRET" \
     --arg mcp_model         "$MODEL_NAME" \
+    --arg mcp_pro_model     "$PRO_MODEL_NAME" \
     --arg mcp_region        "$REGION" \
     --arg mcp_status        "$MCP_STATUS" \
     --arg cl_status         "$CLOUD_LOGGING_STATUS" \
@@ -297,6 +298,7 @@ build_secret_payload() {
           client_id:     $mcp_client_id,
           client_secret: $mcp_client_secret,
           model:         $mcp_model,
+          pro_model:     $mcp_pro_model,
           region:        $mcp_region,
           status:        $mcp_status
         },

@@ -105,9 +105,9 @@ export interface McpTool {
 
 export type McpChatEvent =
   | { type: 'session_restarted'; session_id: string }
-  | { type: 'delta'; text: string }
-  | { type: 'tool_call'; id: string; name: string; args: Record<string, unknown> }
-  | { type: 'tool_result'; id: string; is_error: boolean; body: string }
+  | { type: 'delta'; text: string; agent?: string }
+  | { type: 'tool_call'; id: string; name: string; args: Record<string, unknown>; agent?: string }
+  | { type: 'tool_result'; id: string; is_error: boolean; body: string; agent?: string }
   | { type: 'error'; message: string }
   | { type: 'done' }
 

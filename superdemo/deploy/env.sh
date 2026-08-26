@@ -50,6 +50,7 @@ export SERVICE_ACCOUNT_NAME="llm-security-v2-svc-acct"
 export MCP_SERVICE_ACCOUNT_NAME="apigee-mcp-svc-acct"
 export MODEL_ARMOR_TEMPLATE_ID="apigee-modelarmor-template"
 export MODEL_NAME="gemini-2.5-flash"
+export PRO_MODEL_NAME="gemini-2.5-pro"
 
 # ── LLM Semantic Cache demo ───────────────────────────────────────────
 # The semantic-cache proxy needs a Vertex AI Vector Search index+endpoint that
