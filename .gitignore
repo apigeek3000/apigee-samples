@@ -402,6 +402,8 @@ CLAUDE.md
 docs/superpowers/
 superdemo/docs/plans
 superdemo/docs/specs
+.agents/
+conductor/
 
 ############
 ### MISC ###

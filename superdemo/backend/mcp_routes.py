@@ -43,12 +43,28 @@ def _mcp_block_or_503(config: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _config_from_secret(config: Dict[str, Any], block: Dict[str, Any]) -> McpConfig:
+    import os
+
+    flash_model = (
+        block.get("flash_model")
+        or os.environ.get("FLASH_MODEL_NAME")
+        or block.get("model")
+        or os.environ.get("MODEL_NAME")
+        or "gemini-2.5-flash"
+    )
+    pro_model = (
+        block.get("pro_model")
+        or os.environ.get("PRO_MODEL_NAME")
+        or "gemini-2.5-pro"
+    )
     return McpConfig(
         mcp_endpoint=block["mcp_endpoint"],
         client_id=block["client_id"],
-        model=block["model"],
+        model=block.get("model") or flash_model,
         region=block["region"],
         project_id=config.get("PROJECT_ID") or "",
+        flash_model=flash_model,
+        pro_model=pro_model,
     )
 
 

@@ -46,7 +46,7 @@ ChatEvent = Dict[str, Any]
 """
 
 
-def _tool_response_to_body(response: Any) -> Tuple[bool, str]:
+def _tool_response_to_body(response: Any, name: str = "") -> Tuple[bool, str]:
     """Reduce an ADK ``function_response.response`` payload to (is_error, body).
 
     MCP tool results arrive as a dumped ``CallToolResult``::
@@ -60,6 +60,8 @@ def _tool_response_to_body(response: Any) -> Tuple[bool, str]:
     *something* meaningful rather than an empty body.
     """
     if not isinstance(response, dict):
+        if response is None and name == "transfer_to_agent":
+            return False, '{"result": "success"}'
         return False, "" if response is None else str(response)
 
     # ADK's run_async wrapper converts MCP transport failures into this shape.
@@ -84,6 +86,10 @@ def _tool_response_to_body(response: Any) -> Tuple[bool, str]:
     if structured is not None:
         return is_error, json.dumps(structured)
 
+    # ADK's transfer_to_agent returns {"result": None}. Surface {"result": "success"}.
+    if response == {"result": None} or response == {"result": ""}:
+        return False, '{"result": "success"}'
+
     # Unknown shape — surface the raw payload rather than an empty bubble.
     return is_error, json.dumps(response)
 
@@ -103,32 +109,43 @@ def adk_event_to_chat_events(event: Any) -> Iterator[ChatEvent]:
     """
     content = getattr(event, "content", None)
     parts = getattr(content, "parts", None) or []
+    author = getattr(event, "author", None)
 
     for part in parts:
         text = getattr(part, "text", None)
         if text:
-            yield {"type": "delta", "text": text}
+            event_dict: ChatEvent = {"type": "delta", "text": text}
+            if author:
+                event_dict["agent"] = author
+            yield event_dict
             continue
 
         call = getattr(part, "function_call", None)
         if call is not None:
-            yield {
+            call_dict: ChatEvent = {
                 "type": "tool_call",
                 "id": getattr(call, "id", ""),
                 "name": getattr(call, "name", ""),
                 "args": getattr(call, "args", {}) or {},
             }
+            if author:
+                call_dict["agent"] = author
+            yield call_dict
             continue
 
         resp = getattr(part, "function_response", None)
         if resp is not None:
-            is_error, body = _tool_response_to_body(getattr(resp, "response", None))
-            yield {
+            resp_name = getattr(resp, "name", "")
+            is_error, body = _tool_response_to_body(getattr(resp, "response", None), name=resp_name)
+            resp_dict: ChatEvent = {
                 "type": "tool_result",
                 "id": getattr(resp, "id", ""),
                 "is_error": is_error,
                 "body": body,
             }
+            if author:
+                resp_dict["agent"] = author
+            yield resp_dict
             continue
 
 
@@ -176,6 +193,8 @@ class McpConfig:
     model: str
     region: str
     project_id: str
+    pro_model: str = "gemini-2.5-pro"
+    flash_model: str = "gemini-2.5-flash"
 
 
 def _build_toolset(config: McpConfig) -> Any:
@@ -217,14 +236,48 @@ def _build_agent(config: McpConfig, toolset: Any) -> Any:
     from google.adk.agents import Agent
 
     _configure_vertex_env(config)
-    return Agent(
-        name="apigee_mcp_demo",
-        model=config.model,
+    flash_model = (
+        config.flash_model
+    )
+    pro_model = (
+        config.pro_model
+    )
+
+    standard_assistant = Agent(
+        name="standard_assistant",
+        model=flash_model,
         tools=[toolset],
         instruction=(
-            "You are a helpful CRM assistant. Use the available tools to answer "
-            "the user's questions. Cite tool results when summarizing data."
+            "You are a helpful and fast CRM assistant. Use the available tools to answer "
+            "routine customer questions, look up accounts, and check order/ticket statuses. "
+            "Cite tool results when summarizing data."
         ),
+        description="Handles routine customer service inquiries, account lookups, and basic data queries.",
+    )
+
+    complex_analyst = Agent(
+        name="complex_analyst",
+        model=pro_model,
+        tools=[toolset],
+        instruction=(
+            "You are a specialized enterprise CRM analyst. Use deep analytical reasoning and "
+            "available tools to handle complex multi-step customer inquiries, multi-party dispute "
+            "analysis, cross-account reconciliation, and policy edge cases. "
+            "Cite tool results when summarizing data."
+        ),
+        description="Handles complex customer investigations, multi-factor analysis, disputes, and cross-record reasoning.",
+    )
+
+    return Agent(
+        name="root_coordinator",
+        model=flash_model,
+        instruction=(
+            "You are the primary customer service coordinator. Evaluate the user's inquiry: "
+            "for standard or routine requests, delegate to 'standard_assistant'. "
+            "For complex multi-step reasoning, disputes, or deep analytical tasks, delegate to 'complex_analyst'."
+        ),
+        description="Primary triage coordinator. Delegates to specialized assistants based on task complexity.",
+        sub_agents=[standard_assistant, complex_analyst],
     )
 
 
