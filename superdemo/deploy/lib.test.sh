@@ -799,6 +799,38 @@ STUB
   (( fail == 0 ))
 ) || fail=1
 
+echo "cloud_run_service_url: prefers deterministic URL; falls back to status.url"
+(
+  stub_dir=$(mktemp -d /tmp/superdemo-stub.XXXXXX)
+  export STUB_DIR="$stub_dir"
+  cat > "$stub_dir/gcloud" <<'STUB'
+#!/bin/bash
+[[ "$1 $2 $3" == "run services describe" && -f "$STUB_DIR/svc.json" ]] || exit 1
+cat "$STUB_DIR/svc.json"
+STUB
+  chmod +x "$stub_dir/gcloud"
+  export PATH="$stub_dir:$PATH"
+
+  cat > "$stub_dir/svc.json" <<'JSON'
+{"metadata":{"annotations":{"run.googleapis.com/urls":"[\"https://svc-abc123-uc.a.run.app\",\"https://svc-277755006048.us-central1.run.app\"]"}},
+ "status":{"url":"https://svc-abc123-uc.a.run.app"}}
+JSON
+  assert_equal "https://svc-277755006048.us-central1.run.app" \
+    "$(cloud_run_service_url svc us-central1 proj)" "  annotation → deterministic URL"
+
+  echo '{"status":{"url":"https://svc-abc123-uc.a.run.app"}}' > "$stub_dir/svc.json"
+  assert_equal "https://svc-abc123-uc.a.run.app" \
+    "$(cloud_run_service_url svc us-central1 proj)" "  no annotation → status.url"
+
+  rm -f "$stub_dir/svc.json"
+  out=$(cloud_run_service_url svc us-central1 proj) && rc=0 || rc=$?
+  assert_equal "1" "$rc" "  describe fails → 1"
+  assert_equal "" "$out" "  describe fails → no output"
+
+  rm -rf "$stub_dir"
+  (( fail == 0 ))
+) || fail=1
+
 if (( fail != 0 )); then
   echo
   echo "FAIL: some tests failed"

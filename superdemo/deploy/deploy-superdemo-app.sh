@@ -179,9 +179,7 @@ fi
 # ── Resolve the backend URL → host for the frontend proxy ─────────────
 BACKEND_URL=""
 if [[ "$backend_status" == "deployed" ]]; then
-  BACKEND_URL=$(gcloud run services describe "$BACKEND_SERVICE" \
-    --region "$REGION" --project "$PROJECT_ID" \
-    --format 'value(status.url)' 2>/dev/null)
+  BACKEND_URL=$(cloud_run_service_url "$BACKEND_SERVICE" "$REGION" "$PROJECT_ID")
 fi
 BACKEND_HOST="${BACKEND_URL#https://}"
 
@@ -224,9 +222,7 @@ EOF
     frontend_status="failed"
     overall_failed=1
   else
-    FRONTEND_URL=$(gcloud run services describe "$FRONTEND_SERVICE" \
-      --region "$REGION" --project "$PROJECT_ID" \
-      --format 'value(status.url)' 2>/dev/null)
+    FRONTEND_URL=$(cloud_run_service_url "$FRONTEND_SERVICE" "$REGION" "$PROJECT_ID")
   fi
 fi
 
