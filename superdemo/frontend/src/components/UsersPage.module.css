@@ -1,0 +1,104 @@
+.wrap {
+  padding: 24px 32px;
+  max-width: 720px;
+  color: var(--text);
+}
+
+.title {
+  margin-top: 0;
+  font-size: 24px;
+}
+
+.section {
+  margin-top: 24px;
+}
+
+.section h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.caption,
+.dim {
+  margin: 0 0 8px;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.entry + .entry {
+  border-top: 1px solid var(--border);
+}
+
+.remove {
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: var(--text-dim);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.remove:hover:not(:disabled) {
+  color: var(--error);
+}
+
+.addRow {
+  display: flex;
+  gap: 8px;
+}
+
+.addRow input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.addRow button {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.addRow button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.error {
+  margin: 6px 0 0;
+  color: var(--error);
+  font-size: 13px;
+}
+
+@media (max-width: 600px) {
+  .wrap {
+    padding: 16px;
+  }
+}

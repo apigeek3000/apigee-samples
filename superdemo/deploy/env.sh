@@ -80,9 +80,3 @@ export FIREBASE_API_KEY="REPLACE_WITH_FIREBASE_WEB_API_KEY"
 export FIREBASE_AUTH_DOMAIN="REPLACE_WITH_PROJECT.firebaseapp.com"
 export FIREBASE_PROJECT_ID="REPLACE_WITH_FIREBASE_PROJECT_ID"
 export FIREBASE_APP_ID="REPLACE_WITH_FIREBASE_WEB_APP_ID"
-
-# Access allowlist (comma-separated; either may be empty). A sign-in is allowed
-# if the email's domain is in ALLOWED_DOMAINS OR the exact address is in
-# ALLOWED_EMAILS. If BOTH are empty, ALL sign-ins are denied (fail closed).
-export ALLOWED_DOMAINS="example.com"
-export ALLOWED_EMAILS=""

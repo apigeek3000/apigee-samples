@@ -25,6 +25,7 @@ import httpx
 import os
 import json
 import logging
+from pydantic import BaseModel
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -57,7 +58,8 @@ if _cors_origins:
     )
 
 from mcp_routes import router as mcp_router  # noqa: E402
-from auth import get_current_user  # noqa: E402
+from auth import get_admin_user, get_current_user  # noqa: E402
+import allowlist_store  # noqa: E402
 from fastapi import Depends  # noqa: E402
 app.include_router(mcp_router, dependencies=[Depends(get_current_user)])
 
@@ -761,6 +763,66 @@ def reload_config():
     _config_cache = None
     get_config()
     return {"status": "reloaded"}
+
+
+# ── Access allowlist (Users page) ─────────────────────────────────────
+class AllowlistEntry(BaseModel):
+    value: str
+
+
+def _check_kind(kind: str) -> None:
+    if kind not in allowlist_store.KINDS:
+        raise HTTPException(status_code=404, detail=f"Unknown list: {kind}")
+
+
+def _allowlist_response() -> dict:
+    try:
+        return allowlist_store.get_allowlist().to_dict()
+    except allowlist_store.AllowlistUnavailable as e:
+        raise HTTPException(status_code=503, detail="Allowlist store unavailable") from e
+
+
+@app.get("/api/me")
+def me(user: dict = Depends(get_current_user)) -> dict:
+    """Who the caller is, and whether to show them the Users page."""
+    return {"email": user.get("email", ""), "is_admin": bool(user.get("is_admin"))}
+
+
+@app.get("/api/admin/allowlist", dependencies=[Depends(get_admin_user)])
+def get_allowlist_route() -> dict:
+    return _allowlist_response()
+
+
+@app.post("/api/admin/allowlist/{kind}")
+def add_allowlist_entry(
+    kind: str,
+    entry: AllowlistEntry,
+    response: Response,
+    user: dict = Depends(get_admin_user),
+) -> dict:
+    _check_kind(kind)
+    try:
+        added = allowlist_store.add_entry(kind, entry.value, actor=user["email"])
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    except allowlist_store.AllowlistUnavailable as e:
+        raise HTTPException(status_code=503, detail="Allowlist store unavailable") from e
+    response.status_code = 201 if added else 200
+    return _allowlist_response()
+
+
+@app.delete("/api/admin/allowlist/{kind}/{value}")
+def remove_allowlist_entry(
+    kind: str, value: str, user: dict = Depends(get_admin_user)
+) -> dict:
+    _check_kind(kind)
+    try:
+        removed = allowlist_store.remove_entry(kind, value, actor=user["email"])
+    except allowlist_store.AllowlistUnavailable as e:
+        raise HTTPException(status_code=503, detail="Allowlist store unavailable") from e
+    if not removed:
+        raise HTTPException(status_code=404, detail=f"Not in {kind}: {value}")
+    return _allowlist_response()
 
 
 @app.get("/api/cloud-logging/recent", dependencies=[Depends(get_current_user)])

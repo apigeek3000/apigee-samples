@@ -750,6 +750,55 @@ STUB
   rm -rf "$stub_dir"
 ) || fail=1
 
+echo
+echo "ensure_firestore_db: describe → reuse; missing → create; datastore → 2; create fails → 1"
+(
+  stub_dir=$(mktemp -d /tmp/superdemo-stub.XXXXXX)
+  export STUB_DIR="$stub_dir"
+  cat > "$stub_dir/gcloud" <<'STUB'
+#!/bin/bash
+case "$1 $2 $3" in
+  "firestore databases describe")
+    [[ -f "$STUB_DIR/db_type" ]] || exit 1
+    cat "$STUB_DIR/db_type"
+    exit 0 ;;
+  "firestore databases create")
+    [[ -f "$STUB_DIR/create_fails" ]] && exit 1
+    echo "$*" > "$STUB_DIR/create_args"
+    exit 0 ;;
+esac
+exit 1
+STUB
+  chmod +x "$stub_dir/gcloud"
+  export PATH="$stub_dir:$PATH"
+
+  echo "FIRESTORE_NATIVE" > "$stub_dir/db_type"
+  out=$(ensure_firestore_db proj us-central1) && rc=0 || rc=$?
+  assert_equal "0" "$rc" "  native db exists → 0"
+  assert_equal "already exists" "$out" "  native db exists → status line"
+  [[ ! -f "$stub_dir/create_args" ]] || { echo "FAIL:   create should not run"; exit 1; }
+
+  echo "DATASTORE_MODE" > "$stub_dir/db_type"
+  out=$(ensure_firestore_db proj us-central1) && rc=0 || rc=$?
+  assert_equal "2" "$rc" "  datastore-mode db → 2"
+
+  rm -f "$stub_dir/db_type"
+  out=$(ensure_firestore_db proj us-central1) && rc=0 || rc=$?
+  assert_equal "0" "$rc" "  missing db → created → 0"
+  assert_equal "created in us-central1" "$out" "  missing db → status line"
+  args=$(cat "$stub_dir/create_args")
+  [[ "$args" == *"--location=us-central1"* && "$args" == *"--type=firestore-native"* ]] \
+    && echo "PASS:   create called with location + native type" \
+    || { echo "FAIL:   unexpected create args: $args"; exit 1; }
+
+  touch "$stub_dir/create_fails"
+  out=$(ensure_firestore_db proj us-central1) && rc=0 || rc=$?
+  assert_equal "1" "$rc" "  create fails → 1"
+
+  rm -rf "$stub_dir"
+  (( fail == 0 ))
+) || fail=1
+
 if (( fail != 0 )); then
   echo
   echo "FAIL: some tests failed"

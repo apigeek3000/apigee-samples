@@ -22,6 +22,8 @@
 #   - the superdemo-config secret (owned by clean-superdemo.sh)
 #   - the cloud-run-source-deploy Artifact Registry repo and its images
 #     (shared by any --source deploy; delete manually if you want it gone)
+#   - the Firestore (default) database and its superdemo/allowlist document
+#     (the database is project-wide and may hold other data)
 
 set -u
 
@@ -61,5 +63,6 @@ echo
 echo "============================================="
 echo " Superdemo app cleanup complete!"
 echo "============================================="
-echo " Note: the superdemo-config secret and the cloud-run-source-deploy"
-echo " Artifact Registry repo were left in place."
+echo " Note: the superdemo-config secret, the cloud-run-source-deploy"
+echo " Artifact Registry repo, and the Firestore access allowlist"
+echo " (document superdemo/allowlist in the (default) database) were left in place."

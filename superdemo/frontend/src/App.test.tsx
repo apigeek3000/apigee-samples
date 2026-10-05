@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, within, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { App } from './App'
 import type { DemosResponse } from './types'
@@ -15,9 +15,13 @@ vi.mock('./api', () => ({
   sendThreatJson: vi.fn(),
   sendCircuitBreaking: vi.fn(),
   sendPerUserTokenLimits: vi.fn(),
+  getMe: vi.fn(),
+  getAllowlist: vi.fn(),
+  addAllowlistEntry: vi.fn(),
+  removeAllowlistEntry: vi.fn(),
 }))
 
-import { fetchDemos } from './api'
+import { fetchDemos, getAllowlist, getMe } from './api'
 
 const signedIn = { email: 'tester@example.com', uid: 'u1' }
 let authState = {
@@ -70,6 +74,7 @@ beforeEach(() => {
   localStorage.clear()
   authState = { user: signedIn as unknown, loading: false, signIn: vi.fn(), signOut: vi.fn() }
   authConfig.enabled = true
+  vi.mocked(getMe).mockResolvedValue({ email: 'tester@example.com', is_admin: false })
 })
 
 describe('App — loading state', () => {
@@ -345,5 +350,60 @@ describe('App — auth gating', () => {
     expect(
       screen.queryByRole('button', { name: /sign in with google/i }),
     ).not.toBeInTheDocument()
+  })
+})
+
+describe('App — users page', () => {
+  it('hides the Users link for non-admins', async () => {
+    vi.mocked(fetchDemos).mockResolvedValue(readyDemos)
+    render(<App />)
+    await waitFor(() => expect(getMe).toHaveBeenCalled())
+    // Let the getMe promise settle so the negative assertion isn't vacuous.
+    await act(async () => {})
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Account menu' }))
+    expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Users' })).not.toBeInTheDocument()
+  })
+
+  it('lets admins open the Users page from the top bar, and Home leaves it', async () => {
+    vi.mocked(fetchDemos).mockResolvedValue(readyDemos)
+    vi.mocked(getMe).mockResolvedValue({ email: 'tester@example.com', is_admin: true })
+    vi.mocked(getAllowlist).mockResolvedValue({ admins: ['tester@example.com'], domains: [], emails: [] })
+    const user = userEvent.setup()
+    render(<App />)
+
+    await waitFor(() => expect(getMe).toHaveBeenCalled())
+    await act(async () => {})
+    await user.click(screen.getByRole('button', { name: 'Account menu' }))
+    await user.click(screen.getByRole('button', { name: 'Users' }))
+    expect(await screen.findByRole('region', { name: 'Admins' })).toBeInTheDocument()
+
+    // The sidebar's Home goes through selectDemo(null), which must leave the Users page.
+    await user.click(
+      within(screen.getByRole('navigation', { name: /Demos/i })).getByRole('button', { name: /^Home$/i }),
+    )
+    expect(screen.queryByRole('region', { name: 'Admins' })).not.toBeInTheDocument()
+  })
+
+  it('shows the Users link in local dev (auth off) for the stub admin', async () => {
+    authConfig.enabled = false
+    vi.mocked(fetchDemos).mockResolvedValue(readyDemos)
+    vi.mocked(getMe).mockResolvedValue({ email: 'local-dev@localhost', is_admin: true })
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(await screen.findByRole('button', { name: 'Account menu' }))
+    expect(screen.getByRole('button', { name: 'Users' })).toBeInTheDocument()
+  })
+
+  it('treats a failed /api/me as non-admin', async () => {
+    vi.mocked(fetchDemos).mockResolvedValue(readyDemos)
+    vi.mocked(getMe).mockRejectedValue({ status: 503, message: 'Allowlist store unavailable' })
+    render(<App />)
+    await waitFor(() => expect(getMe).toHaveBeenCalled())
+    // Let the getMe promise settle so the negative assertion isn't vacuous.
+    await act(async () => {})
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Account menu' }))
+    expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Users' })).not.toBeInTheDocument()
   })
 })

@@ -1,8 +1,11 @@
 import { describe, it, expect, vi, afterEach, beforeEach, type Mock } from 'vitest'
 import {
+  addAllowlistEntry,
   authedFetch,
   fetchDemos,
+  getMe,
   parseQuotaResponse,
+  removeAllowlistEntry,
   sendBasicQuota,
   sendCircuitBreaking,
   sendLlmSecurity,
@@ -862,5 +865,60 @@ describe('fetchDemos — new metadata fields', () => {
     expect(result.demos[0].secondary_region).toBe('us-east4')
     expect(result.demos[0].failover_threshold).toBe(2)
     expect(result.demos[0].window_minutes).toBe(2)
+  })
+})
+
+describe('allowlist api', () => {
+  const list = { emails: [], domains: ['partner.com'], admins: ['me@corp.com'] }
+
+  it('getMe returns the parsed body', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ email: 'me@corp.com', is_admin: true }), { status: 200 }),
+      ),
+    )
+    await expect(getMe()).resolves.toEqual({ email: 'me@corp.com', is_admin: true })
+  })
+
+  it('addAllowlistEntry POSTs the value as JSON', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify(list), { status: 201 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await addAllowlistEntry('domains', 'partner.com')
+
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/admin/allowlist/domains')
+    const init = fetchMock.mock.calls[0][1]
+    expect(init.method).toBe('POST')
+    expect(init.headers.get('Content-Type')).toBe('application/json')
+    expect(JSON.parse(init.body)).toEqual({ value: 'partner.com' })
+    expect(result).toEqual(list)
+  })
+
+  it('removeAllowlistEntry URL-encodes the value', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify(list), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await removeAllowlistEntry('emails', 'a+b@x.com')
+
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/admin/allowlist/emails/a%2Bb%40x.com')
+    expect(fetchMock.mock.calls[0][1].method).toBe('DELETE')
+  })
+
+  it('surfaces the backend detail as the error message', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ detail: "Not a valid domain: 'nodot'" }), { status: 422 }),
+      ),
+    )
+    await expect(addAllowlistEntry('domains', 'nodot')).rejects.toMatchObject({
+      status: 422,
+      message: "Not a valid domain: 'nodot'",
+    })
   })
 })

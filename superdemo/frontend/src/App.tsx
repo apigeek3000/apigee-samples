@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchDemos } from './api'
+import { fetchDemos, getMe } from './api'
 import type { DemosResponse } from './types'
 import { Sidebar } from './components/Sidebar'
 import { Topbar } from './components/Topbar'
@@ -17,6 +17,7 @@ import { LlmTokenLimitsPerUserDemo } from './components/LlmTokenLimitsPerUserDem
 import { LlmSemanticCacheDemo } from './components/LlmSemanticCacheDemo'
 import { EmptyState } from './components/EmptyState'
 import { LoginScreen } from './components/LoginScreen'
+import { UsersPage } from './components/UsersPage'
 import { useShowStatus } from './hooks/useShowStatus'
 import { useAuth } from './hooks/useAuth'
 import { authEnabled } from './auth'
@@ -28,6 +29,8 @@ export function App() {
   const [showStatus, setShowStatus] = useShowStatus()
   const { user, loading: authLoading, signIn, signOut } = useAuth()
   const [accessDenied, setAccessDenied] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [showUsersPage, setShowUsersPage] = useState(false)
   
   // Persisted collapsible sidebar state
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
@@ -59,10 +62,29 @@ export function App() {
   }, [user])
 
   useEffect(() => {
+    // Only admins see the Users link; any failure just hides it. Reset first so
+    // sign-out or a different sign-in never inherits the previous admin state.
+    setIsAdmin(false)
+    setShowUsersPage(false)
+    if (authEnabled && !user) return
+    getMe()
+      .then((me) => setIsAdmin(me.is_admin))
+      .catch(() => setIsAdmin(false))
+  }, [user])
+
+  useEffect(() => {
     localStorage.setItem('apigee-superdemo-sidebar-collapsed', String(isSidebarCollapsed))
   }, [isSidebarCollapsed])
 
   const activeDemo = demos?.demos.find((d) => d.id === activeDemoId) ?? null
+  const selectDemo = (id: string | null) => {
+    setActiveDemoId(id)
+    setShowUsersPage(false)
+  }
+  const openUsersPage = () => {
+    setActiveDemoId(null)
+    setShowUsersPage(true)
+  }
 
   // Auth gating only applies when auth is enabled (Cloud Run by default).
   // Local dev skips straight to the app.
@@ -90,7 +112,7 @@ export function App() {
       <Sidebar
         demos={demos?.demos ?? []}
         activeDemoId={activeDemoId}
-        onSelect={setActiveDemoId}
+        onSelect={selectDemo}
         showStatus={showStatus}
         onShowStatusChange={setShowStatus}
         isCollapsed={isSidebarCollapsed}
@@ -100,20 +122,25 @@ export function App() {
           isSidebarCollapsed={isSidebarCollapsed}
           onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
           activeDemo={activeDemo}
-          onNavigateHome={() => setActiveDemoId(null)}
+          onNavigateHome={() => selectDemo(null)}
           userEmail={authEnabled ? (user?.email ?? undefined) : undefined}
+          userName={authEnabled ? (user?.displayName ?? undefined) : undefined}
+          userPhotoUrl={authEnabled ? (user?.photoURL ?? undefined) : undefined}
           onSignOut={authEnabled ? () => void signOut() : undefined}
+          onOpenUsers={isAdmin ? openUsersPage : undefined}
+          showingUsers={showUsersPage}
         />
         <div className="app__content">
           <StatusBanner demos={demos} error={error} />
-          {activeDemo === null && demos && (
+          {showUsersPage && <UsersPage />}
+          {!showUsersPage && activeDemo === null && demos && (
             <Homepage
               demos={demos.demos}
-              onSelect={setActiveDemoId}
+              onSelect={selectDemo}
               showStatus={showStatus}
             />
           )}
-          {activeDemo === null && !demos && <EmptyState />}
+          {!showUsersPage && activeDemo === null && !demos && <EmptyState />}
           {activeDemo?.placeholder && <PlaceholderDemo demo={activeDemo} />}
           {!activeDemo?.placeholder && activeDemo?.id === 'basic-quota' && (
             <BasicQuotaDemo projectId={demos?.project_id} />

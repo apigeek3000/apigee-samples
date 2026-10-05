@@ -37,13 +37,7 @@ Do this one-time setup in the same GCP project, then fill the values into
    - `authDomain` → `FIREBASE_AUTH_DOMAIN`
    - `projectId` → `FIREBASE_PROJECT_ID`
    - `appId` → `FIREBASE_APP_ID`
-4. Set the allowlist in `secret.sh`: `ALLOWED_DOMAINS` (e.g.
-   `example.com,other.com`) and/or `ALLOWED_EMAILS` (e.g.
-   `alice@gmail.com,bob@gmail.com`). Both are comma-separated and either may be
-   empty. A sign-in is allowed when the email's **domain** is in
-   `ALLOWED_DOMAINS` **or** its **exact address** is in `ALLOWED_EMAILS`. If
-   **both are empty, all sign-ins are denied** (fail-closed).
-5. Deploy the app (below). After the **first** frontend deploy, copy the printed
+4. Deploy the app (below). After the **first** frontend deploy, copy the printed
    Cloud Run frontend URL into **Firebase Console → Authentication → Settings →
    Authorized domains**, then reload the app. The frontend URL will look something
    like this: superdemo-frontend-your-project-number.your-service-region.run.app
@@ -68,32 +62,28 @@ frontend build, so auth is active automatically.
 
 To tear down just the app services: `./superdemo/deploy/clean-superdemo-app.sh`.
 
-## Updating the allowlist without redeploying the app
+## Add admin user
 
-The allowlist lives entirely in the backend's `ALLOWED_DOMAINS` /
-`ALLOWED_EMAILS` environment variables, and the backend re-reads them on every
-request. To change who can sign in, you do **not** need to rebuild or re-run
-`deploy-superdemo-app.sh` — just update the env vars on the existing
-`superdemo-backend` service. Cloud Run rolls out a new revision in seconds
-(same container image, no source rebuild):
+Who can sign in is stored in Firestore, in the document `superdemo/allowlist`
+of the project's `(default)` database. It holds three lists:
+
+- **admins** — can sign in, and can manage access on the Users page;
+- **domains** — anyone whose email is at one of these domains can sign in;
+- **emails** — these exact addresses can sign in.
+
+On a new deploy the lists are empty, so nobody can sign in yet. Make yourself
+the first admin once, from your machine. This uses your ADC credentials, which
+need `roles/datastore.user` (or broader) on the project:
 
 ```bash
-# Replace the whole list (values may contain commas, so keep the ^|^ delimiter):
-gcloud run services update superdemo-backend \
-  --region "$REGION" --project "$PROJECT_ID" \
-  --update-env-vars "^|^ALLOWED_DOMAINS=example.com,partner.com|ALLOWED_EMAILS=alice@gmail.com,bob@gmail.com"
-
-# Update just one list:
-gcloud run services update superdemo-backend \
-  --region "$REGION" --project "$PROJECT_ID" \
-  --update-env-vars "^|^ALLOWED_EMAILS=alice@gmail.com,carol@gmail.com"
+cd superdemo/backend
+uv run python -m allowlist_store add-admin you@example.com
+uv run python -m allowlist_store list   # shows what's stored
 ```
 
-The new revision serves the updated allowlist immediately; already-signed-in
-users who are removed are denied on their next `/api/*` request. Keep
-`secret.sh` in sync so the next full deploy doesn't revert your change. (The
-`^|^` prefix tells `gcloud` to split `KEY=VALUE` pairs on `|` instead of `,`,
-which is required because the allowlist values themselves contain commas.)
+Then sign in and click **Users** in the top-right corner to add domains,
+emails and more admins. Changes take effect within about 30 seconds, with no
+redeploy. If you ever remove yourself as an admin, run `add-admin` again.
 
 ## How the auth toggle works
 
@@ -147,7 +137,7 @@ After completing the Firebase setup above:
    turns on the frontend sign-in gate. Vite reads env files only at startup, so
    restart `npm run dev` after editing `.env`.
 
-3. Open http://localhost:5173 and sign in with an allowlisted Google account
+3. Open http://localhost:5173 and sign in with a Google account on the allowlist (see *Managing access*)
    (`localhost` is a Firebase-authorized domain by default). A non-allowlisted
    account lands on the access-denied screen.
 

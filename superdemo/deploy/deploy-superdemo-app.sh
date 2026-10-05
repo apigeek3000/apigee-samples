@@ -79,6 +79,7 @@ if ! gcloud services enable \
       run.googleapis.com \
       cloudbuild.googleapis.com \
       artifactregistry.googleapis.com \
+      firestore.googleapis.com \
       --project="$PROJECT_ID"; then
   api_enable_status="failed"
   overall_failed=1
@@ -93,8 +94,9 @@ if ! gcloud secrets describe "$SECRET_NAME" --project="$PROJECT_ID" >/dev/null 2
 fi
 
 # ── Provision the backend service account + roles ─────────────────────
-# The backend reads the secret, mints Vertex bearer tokens via ADC, and reads
-# Cloud Logging entries for the cloud-logging demo. Grant exactly those roles.
+# The backend reads the secret, mints Vertex bearer tokens via ADC, reads
+# Cloud Logging entries for the cloud-logging demo, and reads/writes the
+# Firestore access allowlist. Grant exactly those roles.
 echo
 echo "============================================="
 echo " Provisioning app service account"
@@ -123,7 +125,8 @@ fi
 for role in \
     "roles/secretmanager.secretAccessor" \
     "roles/aiplatform.user" \
-    "roles/logging.viewer"; do
+    "roles/logging.viewer" \
+    "roles/datastore.user"; do
   echo "  Granting $role to $APP_SA_EMAIL..."
   if ! grant_sa_role "$PROJECT_ID" "$APP_SA_EMAIL" "$role"; then
     echo "  WARN: failed to grant $role"
@@ -131,22 +134,42 @@ for role in \
   fi
 done
 
+# ── Firestore database for the access allowlist ───────────────────────
+echo
+echo "============================================="
+echo " Ensuring Firestore database (access allowlist)"
+echo "============================================="
+firestore_result=$(ensure_firestore_db "$PROJECT_ID" "$REGION")
+firestore_rc=$?
+echo "  (default) database: $firestore_result"
+case $firestore_rc in
+  0)
+    firestore_status="ok ($firestore_result)"
+    ;;
+  2)
+    firestore_status="unusable (Datastore mode)"
+    echo "  WARN: the access allowlist needs a Native-mode Firestore database;"
+    echo "        every sign-in will fail until that's resolved."
+    overall_failed=1
+    ;;
+  *)
+    firestore_status="failed ($firestore_result)"
+    overall_failed=1
+    ;;
+esac
+
 # ── Deploy the backend ────────────────────────────────────────────────
 echo
 echo "============================================="
 echo " Deploying $BACKEND_SERVICE to Cloud Run"
 echo "============================================="
-if [[ -z "${ALLOWED_DOMAINS:-}" && -z "${ALLOWED_EMAILS:-}" ]]; then
-  echo "  WARN: ALLOWED_DOMAINS and ALLOWED_EMAILS are both empty —"
-  echo "        the app will deny ALL sign-ins (fail-closed). Set at least one in secret.sh."
-fi
 backend_status="deployed"
 if ! gcloud run deploy "$BACKEND_SERVICE" \
       --source "$superdemo_dir/backend" \
       --region "$REGION" \
       --project "$PROJECT_ID" \
       --service-account "$APP_SA_EMAIL" \
-      --set-env-vars "^|^GOOGLE_CLOUD_PROJECT=$PROJECT_ID|FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID:-$PROJECT_ID}|AUTH_ENABLED=true|ALLOWED_DOMAINS=${ALLOWED_DOMAINS:-}|ALLOWED_EMAILS=${ALLOWED_EMAILS:-}" \
+      --set-env-vars "^|^GOOGLE_CLOUD_PROJECT=$PROJECT_ID|FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID:-$PROJECT_ID}|AUTH_ENABLED=true" \
       --allow-unauthenticated \
       --quiet; then
   backend_status="failed"
@@ -214,6 +237,7 @@ echo " Superdemo App Deployment Summary"
 echo "================================================================="
 echo
 printf " %-20s %s\n" "API enablement:" "$api_enable_status"
+printf " %-20s %s\n" "Firestore:" "$firestore_status"
 printf " %-20s %s\n" "$BACKEND_SERVICE:" "$backend_status"
 printf " %-20s %s\n" "$FRONTEND_SERVICE:" "$frontend_status"
 echo
@@ -228,6 +252,10 @@ echo
 if (( overall_failed != 0 )); then
   echo " One or more steps failed (exit code 1). See the log above."
 fi
+echo " First deploy? Make yourself an admin (needs roles/datastore.user):"
+echo "   cd superdemo/backend && uv run python -m allowlist_store add-admin you@example.com"
+echo " Then manage access from the app's Users link (top-right)."
+echo
 echo " Tear down with: ./superdemo/deploy/clean-superdemo-app.sh"
 echo "================================================================="
 

@@ -71,6 +71,13 @@ with no CORS setup. Open http://localhost:5173 and pick a demo from the sidebar
 when deployed to Cloud Run). To exercise the real Firebase sign-in flow locally,
 see [DEPLOY.md](DEPLOY.md) → *How the auth toggle works*.
 
+The backend reads the access allowlist from the live Firestore database in
+your project using your ADC credentials, so your account needs
+`roles/datastore.user` (or broader, such as Editor) on the project. With auth
+off you're treated as an admin, so the **Users** link in the top-right corner
+opens that live allowlist. Edits there change who can sign in to the deployed
+app too.
+
 Backend API docs: FastAPI auto-generates interactive Swagger UI at
 http://localhost:8000/docs and ReDoc at http://localhost:8000/redoc. The
 raw OpenAPI schema is at http://localhost:8000/openapi.json.

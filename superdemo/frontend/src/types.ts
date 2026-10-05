@@ -178,3 +178,15 @@ export interface SemanticCacheResponse {
   totalTokens?: number
   body: unknown
 }
+
+// ── Users page (access allowlist) ────────────────────────────────────
+
+export type AllowlistKind = 'emails' | 'domains' | 'admins'
+
+/** Each list sorted, as returned by GET /api/admin/allowlist. */
+export type Allowlist = Record<AllowlistKind, string[]>
+
+export interface Me {
+  email: string
+  is_admin: boolean
+}

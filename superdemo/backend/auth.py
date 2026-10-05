@@ -12,10 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Firebase ID-token verification and email allowlist for the superdemo backend.
+"""Firebase ID-token verification and Firestore allowlist for the superdemo backend.
 
-Auth is enforced when enabled (see `_auth_enabled`): on by default under Cloud
-Run, off by default in local development. Tests bypass it via
+Who may sign in, and who is an admin, lives in Firestore (see
+allowlist_store.py). Auth is enforced when enabled (see `_auth_enabled`): on by
+default under Cloud Run, off by default in local development, where a stub
+admin user is returned. Tests bypass it via
 `app.dependency_overrides[get_current_user]` (see conftest.py) — the real
 verification path still ships and runs outside tests.
 """
@@ -37,11 +39,16 @@ def is_email_allowed(email: str, domains: set[str], emails: set[str]) -> bool:
     return domain in {d.strip().lower() for d in domains}
 
 
+import logging
 import os
 
 import firebase_admin
 from firebase_admin import auth as firebase_auth
-from fastapi import HTTPException, Request
+from fastapi import Depends, HTTPException, Request
+
+import allowlist_store
+
+logger = logging.getLogger(__name__)
 
 # Lazy Firebase app handle (matches the lazy-init pattern in main.py for the
 # logging client / Vertex credentials). Importing this module has no side
@@ -59,7 +66,11 @@ def _ensure_firebase() -> None:
         "GOOGLE_CLOUD_PROJECT"
     )
     options = {"projectId": project_id} if project_id else None
-    _firebase_app = firebase_admin.initialize_app(options=options)
+    try:
+        _firebase_app = firebase_admin.initialize_app(options=options)
+    except Exception:
+        logger.exception("auth: Firebase app init failed")
+        raise
 
 
 def _auth_enabled() -> bool:
@@ -76,25 +87,15 @@ def _auth_enabled() -> bool:
     return bool(os.environ.get("K_SERVICE"))
 
 
-def _allowlist_from_env() -> tuple[set[str], set[str]]:
-    domains = {
-        d.strip() for d in os.environ.get("ALLOWED_DOMAINS", "").split(",") if d.strip()
-    }
-    emails = {
-        e.strip() for e in os.environ.get("ALLOWED_EMAILS", "").split(",") if e.strip()
-    }
-    return domains, emails
-
-
 def get_current_user(request: Request) -> dict:
     """FastAPI dependency: verify the Firebase ID token and enforce the allowlist.
 
-    401 — missing/malformed/invalid token. 403 — verified but unverified email
-    or not on the allowlist. When auth is disabled (local dev by default), it
-    short-circuits to a stub user without requiring a token.
+    401 — missing/malformed/invalid token. 403 — unverified email or not on the
+    allowlist. 503 — the Firestore allowlist couldn't be read. When auth is
+    disabled (local dev by default), it short-circuits to a stub admin user.
     """
     if not _auth_enabled():
-        return {"email": "local-dev@localhost", "uid": "local-dev"}
+        return {"email": "local-dev@localhost", "uid": "local-dev", "is_admin": True}
 
     header = request.headers.get("authorization", "")
     if not header.lower().startswith("bearer "):
@@ -105,14 +106,30 @@ def get_current_user(request: Request) -> dict:
     try:
         decoded = firebase_auth.verify_id_token(token)
     except Exception as e:  # firebase raises several subclasses; treat all as 401
+        logger.warning("auth: token verification failed: %s", type(e).__name__)
         raise HTTPException(status_code=401, detail="Invalid token") from e
 
     if not decoded.get("email_verified"):
         raise HTTPException(status_code=403, detail="Email not verified")
 
     email = decoded.get("email", "")
-    domains, emails = _allowlist_from_env()
-    if not is_email_allowed(email, domains, emails):
+    try:
+        allowlist = allowlist_store.get_allowlist()
+    except allowlist_store.AllowlistUnavailable as e:
+        raise HTTPException(status_code=503, detail="Allowlist store unavailable") from e
+
+    if not is_email_allowed(
+        email, set(allowlist.domains), set(allowlist.emails | allowlist.admins)
+    ):
+        logger.info("access denied: %s", email)
         raise HTTPException(status_code=403, detail="Not authorized")
 
-    return {"email": email, "uid": decoded.get("uid", "")}
+    is_admin = email.strip().lower() in allowlist.admins
+    return {"email": email, "uid": decoded.get("uid", ""), "is_admin": is_admin}
+
+
+def get_admin_user(user: dict = Depends(get_current_user)) -> dict:
+    """FastAPI dependency: like get_current_user, but 403 unless an admin."""
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin only")
+    return user
