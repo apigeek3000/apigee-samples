@@ -291,83 +291,6 @@ echo "require_env_vars: set -u-safe; lists missing vars + hint, passes when all 
 ) || fail=1
 
 echo
-echo "wait_for_sa: returns once describe succeeds, fails if it never does"
-(
-  # Stub gcloud to succeed only on the 2nd describe call (counter via temp file).
-  stub_dir=$(mktemp -d /tmp/superdemo-stub.XXXXXX)
-  count_file="$stub_dir/count"
-  echo 0 > "$count_file"
-  cat > "$stub_dir/gcloud" <<STUB
-#!/bin/bash
-n=\$(cat "$count_file")
-n=\$((n + 1))
-echo "\$n" > "$count_file"
-[[ "\$n" -ge 2 ]]
-STUB
-  chmod +x "$stub_dir/gcloud"
-  export PATH="$stub_dir:$PATH"
-
-  # Override sleep so the test doesn't actually wait.
-  sleep() { :; }
-
-  if wait_for_sa "sa@x.iam.gserviceaccount.com" "proj" 5 0; then
-    echo "PASS:   succeeds once SA becomes visible"
-  else
-    echo "FAIL:   expected success within max attempts"
-    rm -rf "$stub_dir"; exit 1
-  fi
-
-  echo 0 > "$count_file"
-  # Now make describe always fail and cap attempts low.
-  cat > "$stub_dir/gcloud" <<'STUB'
-#!/bin/bash
-exit 1
-STUB
-  chmod +x "$stub_dir/gcloud"
-  if wait_for_sa "sa@x.iam.gserviceaccount.com" "proj" 2 0; then
-    echo "FAIL:   expected failure when SA never appears"
-    rm -rf "$stub_dir"; exit 1
-  else
-    echo "PASS:   fails when SA never appears"
-  fi
-  rm -rf "$stub_dir"
-) || fail=1
-
-echo
-echo "grant_sa_role: retries transient failures, succeeds on a later attempt"
-(
-  stub_dir=$(mktemp -d /tmp/superdemo-stub.XXXXXX)
-  count_file="$stub_dir/count"
-  echo 0 > "$count_file"
-  # Fail the first 2 binding attempts (simulating IAM propagation), then succeed.
-  cat > "$stub_dir/gcloud" <<STUB
-#!/bin/bash
-n=\$(cat "$count_file")
-n=\$((n + 1))
-echo "\$n" > "$count_file"
-[[ "\$n" -ge 3 ]]
-STUB
-  chmod +x "$stub_dir/gcloud"
-  export PATH="$stub_dir:$PATH"
-  sleep() { :; }
-
-  if grant_sa_role "proj" "sa@x.iam.gserviceaccount.com" "roles/foo" 5; then
-    attempts=$(cat "$count_file")
-    rm -rf "$stub_dir"
-    if [[ "$attempts" == "3" ]]; then
-      echo "PASS:   succeeded on attempt 3 after retrying"
-    else
-      echo "FAIL:   expected 3 attempts, got $attempts"
-      exit 1
-    fi
-  else
-    rm -rf "$stub_dir"
-    echo "FAIL:   expected eventual success"
-    exit 1
-  fi
-) || fail=1
-
-echo
 echo "inject_target_pool_step: inserts a Step after each DC-Collect step"
 (
   fixture=$(mktemp /tmp/superdemo-inject.XXXXXX.xml)
@@ -751,54 +674,6 @@ STUB
 ) || fail=1
 
 echo
-echo "ensure_firestore_db: describe → reuse; missing → create; datastore → 2; create fails → 1"
-(
-  stub_dir=$(mktemp -d /tmp/superdemo-stub.XXXXXX)
-  export STUB_DIR="$stub_dir"
-  cat > "$stub_dir/gcloud" <<'STUB'
-#!/bin/bash
-case "$1 $2 $3" in
-  "firestore databases describe")
-    [[ -f "$STUB_DIR/db_type" ]] || exit 1
-    cat "$STUB_DIR/db_type"
-    exit 0 ;;
-  "firestore databases create")
-    [[ -f "$STUB_DIR/create_fails" ]] && exit 1
-    echo "$*" > "$STUB_DIR/create_args"
-    exit 0 ;;
-esac
-exit 1
-STUB
-  chmod +x "$stub_dir/gcloud"
-  export PATH="$stub_dir:$PATH"
-
-  echo "FIRESTORE_NATIVE" > "$stub_dir/db_type"
-  out=$(ensure_firestore_db proj us-central1) && rc=0 || rc=$?
-  assert_equal "0" "$rc" "  native db exists → 0"
-  assert_equal "already exists" "$out" "  native db exists → status line"
-  [[ ! -f "$stub_dir/create_args" ]] || { echo "FAIL:   create should not run"; exit 1; }
-
-  echo "DATASTORE_MODE" > "$stub_dir/db_type"
-  out=$(ensure_firestore_db proj us-central1) && rc=0 || rc=$?
-  assert_equal "2" "$rc" "  datastore-mode db → 2"
-
-  rm -f "$stub_dir/db_type"
-  out=$(ensure_firestore_db proj us-central1) && rc=0 || rc=$?
-  assert_equal "0" "$rc" "  missing db → created → 0"
-  assert_equal "created in us-central1" "$out" "  missing db → status line"
-  args=$(cat "$stub_dir/create_args")
-  [[ "$args" == *"--location=us-central1"* && "$args" == *"--type=firestore-native"* ]] \
-    && echo "PASS:   create called with location + native type" \
-    || { echo "FAIL:   unexpected create args: $args"; exit 1; }
-
-  touch "$stub_dir/create_fails"
-  out=$(ensure_firestore_db proj us-central1) && rc=0 || rc=$?
-  assert_equal "1" "$rc" "  create fails → 1"
-
-  rm -rf "$stub_dir"
-  (( fail == 0 ))
-) || fail=1
-
 echo "cloud_run_service_url: prefers deterministic URL; falls back to status.url"
 (
   stub_dir=$(mktemp -d /tmp/superdemo-stub.XXXXXX)

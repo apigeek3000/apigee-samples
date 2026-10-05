@@ -14,7 +14,7 @@
 
 """Firestore-backed access allowlist for the superdemo backend.
 
-One document (superdemo/allowlist in the project's (default) database) holds
+One document (superdemo/allowlist in the project's `superdemo` database) holds
 three lists: `emails` and `domains` (who may sign in) and `admins` (who may
 sign in AND manage the lists on the Users page). Reads are cached per process
 for 30 seconds; writes clear the cache.
@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 
 KINDS = ("emails", "domains", "admins")
 _LABELS = {"emails": "email", "domains": "domain", "admins": "admin"}
+_DATABASE = "superdemo"  # created by superdemo/terraform
 _COLLECTION = "superdemo"
 _DOCUMENT = "allowlist"
 _CACHE_TTL_SECONDS = 30.0
@@ -102,7 +103,7 @@ def _get_client():
     try:
         from google.cloud import firestore
 
-        _client = firestore.Client(project=project_id)
+        _client = firestore.Client(project=project_id, database=_DATABASE)
     except Exception as e:
         logger.error("allowlist: Firestore client init failed: %s: %s", type(e).__name__, e)
         raise AllowlistUnavailable(str(e)) from e

@@ -14,16 +14,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Tears down what deploy-superdemo-app.sh created: the two Cloud Run services
-# and the backend service account. Best-effort throughout — missing resources
-# are skipped, not treated as errors.
+# Tears down what deploy-superdemo-app.sh created: the two Cloud Run services.
+# Best-effort throughout — missing resources are skipped, not treated as errors.
 #
 # Deliberately left in place:
-#   - the superdemo-config secret (owned by clean-superdemo.sh)
+#   - the backend service account and the superdemo-config secret
+#     (owned by superdemo/terraform)
 #   - the cloud-run-source-deploy Artifact Registry repo and its images
 #     (shared by any --source deploy; delete manually if you want it gone)
-#   - the Firestore (default) database and its superdemo/allowlist document
-#     (the database is project-wide and may hold other data)
+#   - the Firestore superdemo database and its superdemo/allowlist document
+#     (owned by superdemo/terraform, which never deletes it)
 
 set -u
 
@@ -39,9 +39,6 @@ if [ -z "${PROJECT_ID:-}" ] || [ -z "${REGION:-}" ]; then
   exit 1
 fi
 
-APP_SA_NAME="${APP_SERVICE_ACCOUNT_NAME:-superdemo-app-svc-acct}"
-APP_SA_EMAIL="${APP_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
-
 echo "============================================="
 echo " Deleting superdemo app Cloud Run services"
 echo "============================================="
@@ -53,16 +50,9 @@ done
 
 echo
 echo "============================================="
-echo " Deleting app service account"
-echo "============================================="
-echo "  Deleting $APP_SA_EMAIL..."
-gcloud iam service-accounts delete "$APP_SA_EMAIL" \
-  --project "$PROJECT_ID" --quiet 2>/dev/null || true
-
-echo
-echo "============================================="
 echo " Superdemo app cleanup complete!"
 echo "============================================="
-echo " Note: the superdemo-config secret, the cloud-run-source-deploy"
-echo " Artifact Registry repo, and the Firestore access allowlist"
-echo " (document superdemo/allowlist in the (default) database) were left in place."
+echo " Note: the app SA and superdemo-config secret (Terraform-owned), the"
+echo " cloud-run-source-deploy Artifact Registry repo, and the Firestore access"
+echo " allowlist (document superdemo/allowlist in the superdemo database) were"
+echo " left in place."

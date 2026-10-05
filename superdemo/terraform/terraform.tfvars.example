@@ -1,0 +1,18 @@
+# Copy to terraform.tfvars (gitignored) and fill in. Terraform loads it
+# automatically for plan, apply, import and console.
+
+# Must match PROJECT_ID and REGION in superdemo/deploy/secret.sh.
+project_id = "<your-project-id>"
+region     = "<your-vertex-region>"
+
+# true = create the Vector Search index for the LLM Semantic Cache demo
+# (~20-30 min, billed hourly).
+enable_semantic_cache = false
+
+# Change only if you've customized MCP_SERVICE_ACCOUNT_NAME /
+# APP_SERVICE_ACCOUNT_NAME in secret.sh.
+# mcp_service_account_name = "apigee-mcp-svc-acct"
+# app_service_account_name = "superdemo-app-svc-acct"
+
+# Pause after enabling APIs and after IAM grants (first create only).
+# propagation_wait = "180s"

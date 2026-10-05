@@ -12,9 +12,11 @@ runs without sign-in by default — see *How the auth toggle works* below.
 
 ## Prerequisites
 
-1. Complete [SETUP.md](SETUP.md) first — the app's backend reads the
-   `superdemo-config` secret that [`deploy-superdemo.sh`](deploy/deploy-superdemo.sh)
-   writes. This deploy must run **after** that one.
+1. Complete [SETUP.md](SETUP.md) first — Terraform creates the backend's
+   service account and the Firestore allowlist database, and the backend
+   reads the `superdemo-config` secret that
+   [`deploy-superdemo.sh`](deploy/deploy-superdemo.sh) writes. This deploy must
+   run **after** both.
 2. [gcloud CLI](https://cloud.google.com/sdk/docs/install), authenticated, with
    the active project set (see SETUP.md → *Authenticate and set the active
    project*).
@@ -61,11 +63,13 @@ The deploy sets `AUTH_ENABLED=true` on the backend and bakes
 frontend build, so auth is active automatically.
 
 To tear down just the app services: `./superdemo/deploy/clean-superdemo-app.sh`.
+Its service account is removed by `terraform destroy` (see SETUP.md).
 
 ## Add admin user
 
 Who can sign in is stored in Firestore, in the document `superdemo/allowlist`
-of the project's `(default)` database. It holds three lists:
+of the project's `superdemo` database (created by Terraform). It holds three
+lists:
 
 - **admins** — can sign in, and can manage access on the Users page;
 - **domains** — anyone whose email is at one of these domains can sign in;

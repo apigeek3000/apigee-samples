@@ -70,93 +70,18 @@ SECRET_NAME="superdemo-config"
 
 overall_failed=0
 
-# ── Enable required APIs (idempotent) ─────────────────────────────────
-echo "============================================="
-echo " Enabling required Google Cloud APIs"
-echo "============================================="
-api_enable_status="ok"
-if ! gcloud services enable \
-      run.googleapis.com \
-      cloudbuild.googleapis.com \
-      artifactregistry.googleapis.com \
-      firestore.googleapis.com \
-      --project="$PROJECT_ID"; then
-  api_enable_status="failed"
-  overall_failed=1
-  echo "WARN: API enablement failed. Continuing so the summary still prints."
-fi
+# APIs, the backend SA ($APP_SA_EMAIL, with its roles) and the Firestore
+# allowlist database are provisioned by superdemo/terraform — run
+# `terraform apply` first.
 
-# ── Precondition: the secret the backend reads must exist ─────────────
-if ! gcloud secrets describe "$SECRET_NAME" --project="$PROJECT_ID" >/dev/null 2>&1; then
+# ── Precondition: the secret the backend reads must have a version ────
+if ! gcloud secrets versions access latest --secret="$SECRET_NAME" \
+      --project="$PROJECT_ID" >/dev/null 2>&1; then
   echo
-  echo "WARN: secret '$SECRET_NAME' not found. Run deploy-superdemo.sh first;"
-  echo "      until it exists the backend will report 'unconfigured'. Deploying anyway."
+  echo "WARN: secret '$SECRET_NAME' has no readable version. Run terraform apply"
+  echo "      and deploy-superdemo.sh first; until then the backend will report"
+  echo "      'unconfigured'. Deploying anyway."
 fi
-
-# ── Provision the backend service account + roles ─────────────────────
-# The backend reads the secret, mints Vertex bearer tokens via ADC, reads
-# Cloud Logging entries for the cloud-logging demo, and reads/writes the
-# Firestore access allowlist. Grant exactly those roles.
-echo
-echo "============================================="
-echo " Provisioning app service account"
-echo "============================================="
-if ! gcloud iam service-accounts describe "$APP_SA_EMAIL" --project="$PROJECT_ID" >/dev/null 2>&1; then
-  echo "  Creating $APP_SA_EMAIL..."
-  if gcloud iam service-accounts create "$APP_SA_NAME" \
-        --project="$PROJECT_ID" \
-        --display-name="Superdemo app (Cloud Run) backend SA"; then
-    # A new SA is not instantly visible to the IAM policy API; granting roles
-    # too soon fails with "does not exist". Wait for it to propagate first.
-    echo "  Waiting for $APP_SA_EMAIL to propagate..."
-    if ! wait_for_sa "$APP_SA_EMAIL" "$PROJECT_ID"; then
-      echo "  WARN: $APP_SA_EMAIL not visible yet; role grants will retry below."
-    fi
-  else
-    echo "  WARN: failed to create $APP_SA_EMAIL"
-    overall_failed=1
-  fi
-else
-  echo "  $APP_SA_EMAIL already exists."
-fi
-
-# Grant roles (add-iam-policy-binding is idempotent). grant_sa_role retries with
-# backoff to ride out any remaining IAM propagation lag after SA creation.
-for role in \
-    "roles/secretmanager.secretAccessor" \
-    "roles/aiplatform.user" \
-    "roles/logging.viewer" \
-    "roles/datastore.user"; do
-  echo "  Granting $role to $APP_SA_EMAIL..."
-  if ! grant_sa_role "$PROJECT_ID" "$APP_SA_EMAIL" "$role"; then
-    echo "  WARN: failed to grant $role"
-    overall_failed=1
-  fi
-done
-
-# ── Firestore database for the access allowlist ───────────────────────
-echo
-echo "============================================="
-echo " Ensuring Firestore database (access allowlist)"
-echo "============================================="
-firestore_result=$(ensure_firestore_db "$PROJECT_ID" "$REGION")
-firestore_rc=$?
-echo "  (default) database: $firestore_result"
-case $firestore_rc in
-  0)
-    firestore_status="ok ($firestore_result)"
-    ;;
-  2)
-    firestore_status="unusable (Datastore mode)"
-    echo "  WARN: the access allowlist needs a Native-mode Firestore database;"
-    echo "        every sign-in will fail until that's resolved."
-    overall_failed=1
-    ;;
-  *)
-    firestore_status="failed ($firestore_result)"
-    overall_failed=1
-    ;;
-esac
 
 # ── Deploy the backend ────────────────────────────────────────────────
 echo
@@ -232,8 +157,6 @@ echo "================================================================="
 echo " Superdemo App Deployment Summary"
 echo "================================================================="
 echo
-printf " %-20s %s\n" "API enablement:" "$api_enable_status"
-printf " %-20s %s\n" "Firestore:" "$firestore_status"
 printf " %-20s %s\n" "$BACKEND_SERVICE:" "$backend_status"
 printf " %-20s %s\n" "$FRONTEND_SERVICE:" "$frontend_status"
 echo

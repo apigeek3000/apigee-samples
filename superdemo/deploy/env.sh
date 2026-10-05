@@ -54,19 +54,20 @@ export PRO_MODEL_NAME="gemini-2.5-pro"
 
 # ── LLM Semantic Cache demo ───────────────────────────────────────────
 # The semantic-cache proxy needs a Vertex AI Vector Search index+endpoint that
-# is slow (~20-30 min) and billed hourly. deploy-superdemo.sh does NOT create
-# it — run ./superdemo/deploy/setup-semantic-cache-index.sh first. These tune
-# the sibling deploy + what the UI displays.
+# is slow (~20-30 min) and billed hourly. Terraform creates it only when
+# enable_semantic_cache = true in superdemo/terraform/terraform.tfvars. These
+# tune the sibling deploy +
+# what the UI displays.
 export EMBEDDINGS_MODEL_ID="text-embedding-005"
 export NEAREST_NEIGHBOR_DISTANCE="0.95"   # bigger = prompts must be MORE similar to hit
 export CACHE_ENTRY_TTL_SEC="300"          # cache entry lifetime, seconds
 
-# Apigee proxy runtime service account for the apigee-mcp demo. deploy-superdemo.sh
-# creates this SA if missing and grants it roles/run.invoker (so the crm-mcp-proxy
-# and customers-api proxies can invoke their Cloud Run targets) and roles/apihub.admin
-# (so mcp-spec-tools can read specs from API hub at runtime). Override SA_EMAIL only
-# if you have a pre-existing SA with these roles you'd rather reuse.
+# Apigee proxy runtime service account for the apigee-mcp demo. Terraform
+# creates it with roles/run.invoker and roles/apihub.admin.
 export SA_EMAIL="${MCP_SERVICE_ACCOUNT_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
+
+# Terraform (superdemo/terraform) reads its inputs from terraform.tfvars, not
+# from here. Keep its project_id and region in sync with PROJECT_ID and REGION.
 
 # ── Firebase authentication (Cloud Run deploy only) ───────────────────
 # Only needed when hosting the app on Cloud Run — see DEPLOY.md. Local dev

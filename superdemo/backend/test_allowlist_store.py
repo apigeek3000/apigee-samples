@@ -156,6 +156,18 @@ def test_client_init_without_project_logs_fix(monkeypatch, caplog):
     assert "gcloud auth application-default login" in caplog.text
 
 
+def test_client_uses_superdemo_database(monkeypatch):
+    from google.cloud import firestore
+
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "proj")
+    monkeypatch.setattr(allowlist_store, "_client", None)
+    calls = []
+    monkeypatch.setattr(firestore, "Client", lambda **kwargs: calls.append(kwargs) or object())
+    allowlist_store._get_client()
+    # Must match google_firestore_database.superdemo in superdemo/terraform.
+    assert calls == [{"project": "proj", "database": "superdemo"}]
+
+
 def test_cli_add_admin(fake_allowlist, capsys):
     fake_allowlist.data = {}
     assert allowlist_store._main(["add-admin", "Me@Corp.com"]) == 0

@@ -118,10 +118,6 @@ done
 echo "  Deleting API hub entry customers-api..."
 apigeecli apihub apis delete --api-id customers-api --org "$PROJECT" -r "$REGION" --token "$TOKEN" 2>/dev/null || true
 
-# Delete the apigee-mcp runtime service account (best-effort).
-echo "  Deleting service account $SA_EMAIL..."
-gcloud iam service-accounts delete "$SA_EMAIL" --project "$PROJECT" --quiet 2>/dev/null || true
-
 # ====================================================================
 # Clean cloud-logging
 # ====================================================================
@@ -167,7 +163,7 @@ if [ -f "$rootdir/llm-token-limits-per-user/undeploy-llm-token-limits-per-user.s
 fi
 
 # ====================================================================
-# Clean llm-semantic-cache-v2 (proxy + App Integration, then the index)
+# Clean llm-semantic-cache-v2 (proxy + App Integration)
 # ====================================================================
 echo "============================================="
 echo " Cleaning LLM Semantic Cache"
@@ -176,28 +172,10 @@ if [ -f "$rootdir/llm-semantic-cache-v2/undeploy-llm-semantic-cache-v2.sh" ]; th
   cd "$rootdir/llm-semantic-cache-v2"
   ./undeploy-llm-semantic-cache-v2.sh || true
 fi
-# Delete the Vector Search index + endpoint so the hourly-billed endpoint does
-# not dangle after teardown. Best-effort — never block the rest of cleanup.
-cd "$scriptdir"
-./setup-semantic-cache-index.sh --teardown || true
-
-# ====================================================================
-# Delete Secret Manager secret
-# ====================================================================
-cd "$rootdir"
-
-echo "============================================="
-echo " Removing Secret Manager secret"
-echo "============================================="
-SECRET_NAME="superdemo-config"
-if gcloud secrets describe "$SECRET_NAME" --project="$PROJECT" >/dev/null 2>&1; then
-  gcloud secrets delete "$SECRET_NAME" --project="$PROJECT" --quiet
-  echo "Deleted secret: $SECRET_NAME"
-else
-  echo "Secret $SECRET_NAME does not exist, skipping."
-fi
 
 echo ""
 echo "============================================="
 echo " Superdemo cleanup complete!"
+echo " Next: terraform destroy (in superdemo/terraform) removes the SAs,"
+echo " the superdemo-config secret, and the Vector Search index."
 echo "============================================="
