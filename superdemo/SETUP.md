@@ -39,12 +39,15 @@ cp ./superdemo/deploy/env.sh ./superdemo/deploy/secret.sh
 ```bash
 source ./superdemo/deploy/secret.sh
 ```
-4. Provision the project: APIs, service accounts, and the `superdemo-config` secret.
+4. Provision the project: APIs, service accounts, the `superdemo-config` secret, and the `superdemo` Firestore database (the access allowlist). Terraform reads its inputs from a gitignored `terraform.tfvars`; copy the example and set `project_id` and `region` to the same values as `PROJECT_ID` and `REGION` in `secret.sh`:
 ```bash
+cp ./superdemo/terraform/terraform.tfvars.example ./superdemo/terraform/terraform.tfvars
 terraform -chdir=superdemo/terraform init
 terraform -chdir=superdemo/terraform apply
 ```
-   For the **LLM Semantic Cache** demo, set `TF_VAR_enable_semantic_cache=true` in `secret.sh` first. It adds a Vector Search index that takes ~20–30 min and is billed hourly; skip it and every other demo still deploys.
+   The first apply pauses twice (`propagation_wait`, default 3 min each) so new APIs and IAM grants propagate before anything uses them; later applies don't wait.
+
+   For the **LLM Semantic Cache** demo, set `enable_semantic_cache = true` in `terraform.tfvars` first. It adds a Vector Search index that takes ~20–30 min and is billed hourly; skip it and every other demo still deploys.
 
 5. Deploy all demo proxies and store the resulting keys in the `superdemo-config` secret:
 ```bash
@@ -53,11 +56,10 @@ terraform -chdir=superdemo/terraform apply
 
 To tear everything down: `./superdemo/deploy/clean-superdemo.sh`, then `terraform -chdir=superdemo/terraform destroy`.
 
-**Deployed before Terraform was added?** Import the existing resources once before `apply` (skip any that don't exist):
+**Deployed before Terraform was added?** Import the existing resources (APIs, service accounts, role grants, the secret container, the Firestore database and, with `enable_semantic_cache`, the Vector Search index) once before `apply`. Resources that don't exist or are already in state are skipped, so it's safe to re-run:
 ```bash
-terraform -chdir=superdemo/terraform import google_service_account.mcp "projects/$PROJECT_ID/serviceAccounts/$SA_EMAIL"
-terraform -chdir=superdemo/terraform import google_service_account.app "projects/$PROJECT_ID/serviceAccounts/superdemo-app-svc-acct@$PROJECT_ID.iam.gserviceaccount.com"
-terraform -chdir=superdemo/terraform import google_secret_manager_secret.config "projects/$PROJECT_ID/secrets/superdemo-config"
+./superdemo/terraform/import-existing.sh
+terraform -chdir=superdemo/terraform apply
 ```
 If you used the old `setup-semantic-cache-index.sh`, delete its index and endpoint (and the `ai-client` service account) before enabling the semantic cache in Terraform, or you'll be billed for two.
 
@@ -109,6 +111,9 @@ cd superdemo/frontend && npm test -- --run
 
 # Deploy bash helpers
 bash superdemo/deploy/lib.test.sh
+
+# Terraform import script helpers
+bash superdemo/terraform/import-existing.test.sh
 ```
 
 ## What's next?

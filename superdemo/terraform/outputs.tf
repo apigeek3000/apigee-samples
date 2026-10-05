@@ -23,3 +23,7 @@ output "app_service_account_email" {
 output "config_secret_id" {
   value = google_secret_manager_secret.config.secret_id
 }
+
+output "firestore_database" {
+  value = google_firestore_database.superdemo.name
+}

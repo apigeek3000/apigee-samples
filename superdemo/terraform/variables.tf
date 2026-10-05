@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# All values come from TF_VAR_* exports in deploy/secret.sh.
+# Set in terraform.tfvars (gitignored; copy terraform.tfvars.example).
 
 variable "project_id" {
   type = string
@@ -38,4 +38,10 @@ variable "enable_semantic_cache" {
   description = "Create the Vector Search index for the semantic-cache demo (~20-30 min, billed hourly)."
   type        = bool
   default     = false
+}
+
+variable "propagation_wait" {
+  description = "Pause after enabling APIs and after IAM grants so they propagate before use (first create only)."
+  type        = string
+  default     = "180s"
 }

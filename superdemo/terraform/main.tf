@@ -23,6 +23,7 @@ locals {
     "cloudtasks.googleapis.com",
     "cloudbuild.googleapis.com",
     "artifactregistry.googleapis.com",
+    "firestore.googleapis.com",
   ]
 
   mcp_roles = ["roles/run.invoker", "roles/apihub.admin"]
@@ -30,6 +31,7 @@ locals {
     "roles/secretmanager.secretAccessor",
     "roles/aiplatform.user",
     "roles/logging.viewer",
+    "roles/datastore.user",
   ]
 }
 
@@ -40,11 +42,28 @@ resource "google_project_service" "apis" {
   disable_on_destroy = false
 }
 
+# Newly enabled APIs and new SAs/grants take ~3 min to propagate; until then
+# dependents (and the deploy scripts run after apply) fail intermittently.
+# Create-only: an apply with nothing new to create doesn't wait.
+resource "time_sleep" "apis_propagation" {
+  create_duration = var.propagation_wait
+  depends_on      = [google_project_service.apis]
+}
+
+resource "time_sleep" "iam_propagation" {
+  create_duration = var.propagation_wait
+  depends_on = [
+    google_project_iam_member.mcp,
+    google_project_iam_member.app,
+    google_project_iam_member.ai_client,
+  ]
+}
+
 # apigee-mcp proxies run as this SA (deployed with --sa "$SA_EMAIL").
 resource "google_service_account" "mcp" {
   account_id   = var.mcp_service_account_name
   display_name = "Apigee MCP demo runtime SA"
-  depends_on   = [google_project_service.apis]
+  depends_on   = [time_sleep.apis_propagation]
 }
 
 resource "google_project_iam_member" "mcp" {
@@ -58,7 +77,7 @@ resource "google_project_iam_member" "mcp" {
 resource "google_service_account" "app" {
   account_id   = var.app_service_account_name
   display_name = "Superdemo app (Cloud Run) backend SA"
-  depends_on   = [google_project_service.apis]
+  depends_on   = [time_sleep.apis_propagation]
 }
 
 resource "google_project_iam_member" "app" {
@@ -76,5 +95,15 @@ resource "google_secret_manager_secret" "config" {
     auto {}
   }
 
-  depends_on = [google_project_service.apis]
+  depends_on = [time_sleep.apis_propagation]
+}
+
+# Access allowlist (backend/allowlist_store.py, which hardcodes this name).
+# ABANDON: destroy removes it from state but keeps the data.
+resource "google_firestore_database" "superdemo" {
+  name            = "superdemo"
+  location_id     = var.region
+  type            = "FIRESTORE_NATIVE"
+  deletion_policy = "ABANDON"
+  depends_on      = [time_sleep.apis_propagation]
 }

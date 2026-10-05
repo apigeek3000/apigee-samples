@@ -55,7 +55,8 @@ export PRO_MODEL_NAME="gemini-2.5-pro"
 # ── LLM Semantic Cache demo ───────────────────────────────────────────
 # The semantic-cache proxy needs a Vertex AI Vector Search index+endpoint that
 # is slow (~20-30 min) and billed hourly. Terraform creates it only when
-# TF_VAR_enable_semantic_cache=true (below). These tune the sibling deploy +
+# enable_semantic_cache = true in superdemo/terraform/terraform.tfvars. These
+# tune the sibling deploy +
 # what the UI displays.
 export EMBEDDINGS_MODEL_ID="text-embedding-005"
 export NEAREST_NEIGHBOR_DISTANCE="0.95"   # bigger = prompts must be MORE similar to hit
@@ -65,11 +66,8 @@ export CACHE_ENTRY_TTL_SEC="300"          # cache entry lifetime, seconds
 # creates it with roles/run.invoker and roles/apihub.admin.
 export SA_EMAIL="${MCP_SERVICE_ACCOUNT_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 
-# ── Terraform (superdemo/terraform) ───────────────────────────────────
-export TF_VAR_project_id="$PROJECT_ID"
-export TF_VAR_region="$REGION"
-export TF_VAR_mcp_service_account_name="$MCP_SERVICE_ACCOUNT_NAME"
-export TF_VAR_enable_semantic_cache="false"   # true = create the Vector Search index
+# Terraform (superdemo/terraform) reads its inputs from terraform.tfvars, not
+# from here. Keep its project_id and region in sync with PROJECT_ID and REGION.
 
 # ── Firebase authentication (Cloud Run deploy only) ───────────────────
 # Only needed when hosting the app on Cloud Run — see DEPLOY.md. Local dev

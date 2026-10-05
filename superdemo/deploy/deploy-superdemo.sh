@@ -363,7 +363,8 @@ for i in "${!demo_labels[@]}"; do
      && ! is_proxy_deployed_to_env "$proxy_name" "$APIGEE_ENV" "$PROJECT" "$TOKEN" >/dev/null 2>&1 \
      && ! is_semantic_cache_index_ready "$PROJECT" "$REGION"; then
     echo "  Vector Search index endpoint not ready."
-    echo "  Set TF_VAR_enable_semantic_cache=true and run terraform apply (~20-30 min), then re-run."
+    echo "  Set enable_semantic_cache = true in superdemo/terraform/terraform.tfvars and run"
+    echo "  terraform apply (~20-30 min), then re-run."
     demo_deploy_status+=("skipped (index prereq missing)")
     demo_test_status+=("skipped (index prereq missing)")
     continue

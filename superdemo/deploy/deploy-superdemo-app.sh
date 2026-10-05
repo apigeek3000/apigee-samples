@@ -70,8 +70,9 @@ SECRET_NAME="superdemo-config"
 
 overall_failed=0
 
-# APIs and the backend SA ($APP_SA_EMAIL, with its roles) are provisioned by
-# superdemo/terraform — run `terraform apply` first.
+# APIs, the backend SA ($APP_SA_EMAIL, with its roles) and the Firestore
+# allowlist database are provisioned by superdemo/terraform — run
+# `terraform apply` first.
 
 # ── Precondition: the secret the backend reads must have a version ────
 if ! gcloud secrets versions access latest --secret="$SECRET_NAME" \
@@ -81,30 +82,6 @@ if ! gcloud secrets versions access latest --secret="$SECRET_NAME" \
   echo "      and deploy-superdemo.sh first; until then the backend will report"
   echo "      'unconfigured'. Deploying anyway."
 fi
-
-# ── Firestore database for the access allowlist ───────────────────────
-echo
-echo "============================================="
-echo " Ensuring Firestore database (access allowlist)"
-echo "============================================="
-firestore_result=$(ensure_firestore_db "$PROJECT_ID" "$REGION")
-firestore_rc=$?
-echo "  (default) database: $firestore_result"
-case $firestore_rc in
-  0)
-    firestore_status="ok ($firestore_result)"
-    ;;
-  2)
-    firestore_status="unusable (Datastore mode)"
-    echo "  WARN: the access allowlist needs a Native-mode Firestore database;"
-    echo "        every sign-in will fail until that's resolved."
-    overall_failed=1
-    ;;
-  *)
-    firestore_status="failed ($firestore_result)"
-    overall_failed=1
-    ;;
-esac
 
 # ── Deploy the backend ────────────────────────────────────────────────
 echo
@@ -180,7 +157,6 @@ echo "================================================================="
 echo " Superdemo App Deployment Summary"
 echo "================================================================="
 echo
-printf " %-20s %s\n" "Firestore:" "$firestore_status"
 printf " %-20s %s\n" "$BACKEND_SERVICE:" "$backend_status"
 printf " %-20s %s\n" "$FRONTEND_SERVICE:" "$frontend_status"
 echo

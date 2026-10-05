@@ -25,7 +25,7 @@ resource "google_service_account" "ai_client" {
   count        = local.semantic_cache_count
   account_id   = "ai-client"
   display_name = "Apigee semantic-cache runtime SA"
-  depends_on   = [google_project_service.apis]
+  depends_on   = [time_sleep.apis_propagation]
 }
 
 resource "google_project_iam_member" "ai_client" {
@@ -59,7 +59,7 @@ resource "google_vertex_ai_index" "semantic_cache" {
     }
   }
 
-  depends_on = [google_project_service.apis]
+  depends_on = [time_sleep.apis_propagation]
 }
 
 resource "google_vertex_ai_index_endpoint" "semantic_cache" {
@@ -67,7 +67,7 @@ resource "google_vertex_ai_index_endpoint" "semantic_cache" {
   display_name            = "semantic-cache-index-endpoint"
   region                  = var.region
   public_endpoint_enabled = true
-  depends_on              = [google_project_service.apis]
+  depends_on              = [time_sleep.apis_propagation]
 }
 
 # Deploying takes ~20-30 min.
