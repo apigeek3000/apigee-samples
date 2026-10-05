@@ -82,22 +82,42 @@ if ! gcloud secrets versions access latest --secret="$SECRET_NAME" \
   echo "      'unconfigured'. Deploying anyway."
 fi
 
+# ── Firestore database for the access allowlist ───────────────────────
+echo
+echo "============================================="
+echo " Ensuring Firestore database (access allowlist)"
+echo "============================================="
+firestore_result=$(ensure_firestore_db "$PROJECT_ID" "$REGION")
+firestore_rc=$?
+echo "  (default) database: $firestore_result"
+case $firestore_rc in
+  0)
+    firestore_status="ok ($firestore_result)"
+    ;;
+  2)
+    firestore_status="unusable (Datastore mode)"
+    echo "  WARN: the access allowlist needs a Native-mode Firestore database;"
+    echo "        every sign-in will fail until that's resolved."
+    overall_failed=1
+    ;;
+  *)
+    firestore_status="failed ($firestore_result)"
+    overall_failed=1
+    ;;
+esac
+
 # ── Deploy the backend ────────────────────────────────────────────────
 echo
 echo "============================================="
 echo " Deploying $BACKEND_SERVICE to Cloud Run"
 echo "============================================="
-if [[ -z "${ALLOWED_DOMAINS:-}" && -z "${ALLOWED_EMAILS:-}" ]]; then
-  echo "  WARN: ALLOWED_DOMAINS and ALLOWED_EMAILS are both empty —"
-  echo "        the app will deny ALL sign-ins (fail-closed). Set at least one in secret.sh."
-fi
 backend_status="deployed"
 if ! gcloud run deploy "$BACKEND_SERVICE" \
       --source "$superdemo_dir/backend" \
       --region "$REGION" \
       --project "$PROJECT_ID" \
       --service-account "$APP_SA_EMAIL" \
-      --set-env-vars "^|^GOOGLE_CLOUD_PROJECT=$PROJECT_ID|FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID:-$PROJECT_ID}|AUTH_ENABLED=true|ALLOWED_DOMAINS=${ALLOWED_DOMAINS:-}|ALLOWED_EMAILS=${ALLOWED_EMAILS:-}" \
+      --set-env-vars "^|^GOOGLE_CLOUD_PROJECT=$PROJECT_ID|FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID:-$PROJECT_ID}|AUTH_ENABLED=true" \
       --allow-unauthenticated \
       --quiet; then
   backend_status="failed"
@@ -107,9 +127,7 @@ fi
 # ── Resolve the backend URL → host for the frontend proxy ─────────────
 BACKEND_URL=""
 if [[ "$backend_status" == "deployed" ]]; then
-  BACKEND_URL=$(gcloud run services describe "$BACKEND_SERVICE" \
-    --region "$REGION" --project "$PROJECT_ID" \
-    --format 'value(status.url)' 2>/dev/null)
+  BACKEND_URL=$(cloud_run_service_url "$BACKEND_SERVICE" "$REGION" "$PROJECT_ID")
 fi
 BACKEND_HOST="${BACKEND_URL#https://}"
 
@@ -152,9 +170,7 @@ EOF
     frontend_status="failed"
     overall_failed=1
   else
-    FRONTEND_URL=$(gcloud run services describe "$FRONTEND_SERVICE" \
-      --region "$REGION" --project "$PROJECT_ID" \
-      --format 'value(status.url)' 2>/dev/null)
+    FRONTEND_URL=$(cloud_run_service_url "$FRONTEND_SERVICE" "$REGION" "$PROJECT_ID")
   fi
 fi
 
@@ -164,6 +180,7 @@ echo "================================================================="
 echo " Superdemo App Deployment Summary"
 echo "================================================================="
 echo
+printf " %-20s %s\n" "Firestore:" "$firestore_status"
 printf " %-20s %s\n" "$BACKEND_SERVICE:" "$backend_status"
 printf " %-20s %s\n" "$FRONTEND_SERVICE:" "$frontend_status"
 echo
@@ -178,6 +195,10 @@ echo
 if (( overall_failed != 0 )); then
   echo " One or more steps failed (exit code 1). See the log above."
 fi
+echo " First deploy? Make yourself an admin (needs roles/datastore.user):"
+echo "   cd superdemo/backend && uv run python -m allowlist_store add-admin you@example.com"
+echo " Then manage access from the app's Users link (top-right)."
+echo
 echo " Tear down with: ./superdemo/deploy/clean-superdemo-app.sh"
 echo "================================================================="
 

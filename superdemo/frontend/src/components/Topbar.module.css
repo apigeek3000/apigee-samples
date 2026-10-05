@@ -153,29 +153,112 @@
 
 .account {
   margin-left: auto;
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
 }
 
-.email {
-  color: var(--text-dim);
-  font-size: 0.85rem;
-}
-
-.signOut {
-  padding: 0.35rem 0.8rem;
-  font-size: 0.85rem;
+.avatarBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.avatarBtn:hover,
+.avatarBtn[aria-expanded='true'] {
+  border-color: var(--accent);
+}
+
+.avatarBtn:focus-visible,
+.menuItem:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.avatarImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatarInitial {
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.avatarIcon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: var(--text-dim);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 200px;
+  max-width: 280px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.menuHeader {
+  padding: 6px 10px 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.menuName {
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.menuName,
+.menuEmail {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.menuEmail {
+  color: var(--text-dim);
+  font-size: 0.8rem;
+}
+
+.menuItem {
+  padding: 6px 10px;
+  border: none;
+  border-radius: 4px;
   background: transparent;
   color: var(--text-dim);
+  font-size: 0.85rem;
+  text-align: left;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
-.signOut:hover {
+.menuItem:hover {
   background: var(--surface-2);
   color: var(--text);
-  border-color: var(--accent);
 }

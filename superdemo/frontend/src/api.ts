@@ -1,4 +1,6 @@
 import type {
+  AllowlistKind,
+  Allowlist,
   ApiError,
   CircuitBreakingResponse,
   CloudLoggingResponse,
@@ -8,6 +10,7 @@ import type {
   DemosResponse,
   McpChatEvent,
   McpTool,
+  Me,
   PerUserId,
   PerUserResponse,
   QuotaResponse,
@@ -551,4 +554,46 @@ export async function sendSemanticCache(
     latencyMs,
     body,
   }
+}
+
+// ── Users page (access allowlist) ────────────────────────────────────
+
+const ALLOWLIST_URL = '/api/admin/allowlist'
+
+async function readJson<T>(response: Response): Promise<T> {
+  if (!response.ok) {
+    throw await parseError(response)
+  }
+  return (await response.json()) as T
+}
+
+export async function getMe(): Promise<Me> {
+  return readJson<Me>(await authedFetch('/api/me'))
+}
+
+export async function getAllowlist(): Promise<Allowlist> {
+  return readJson<Allowlist>(await authedFetch(ALLOWLIST_URL))
+}
+
+export async function addAllowlistEntry(
+  kind: AllowlistKind,
+  value: string,
+): Promise<Allowlist> {
+  const response = await authedFetch(`${ALLOWLIST_URL}/${kind}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ value }),
+  })
+  return readJson<Allowlist>(response)
+}
+
+export async function removeAllowlistEntry(
+  kind: AllowlistKind,
+  value: string,
+): Promise<Allowlist> {
+  const response = await authedFetch(
+    `${ALLOWLIST_URL}/${kind}/${encodeURIComponent(value)}`,
+    { method: 'DELETE' },
+  )
+  return readJson<Allowlist>(response)
 }

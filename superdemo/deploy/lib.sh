@@ -43,6 +43,52 @@ require_env_vars() {
   return 0
 }
 
+# ensure_firestore_db <project> <location>
+#
+# The superdemo access allowlist lives in the project's (default) Firestore
+# database, which must be in Native mode. Reuse it if it exists; otherwise
+# create it in <location> (a database's location can't be changed later).
+# Prints one status line. Returns 0 when a Native-mode database is ready,
+# 1 when creation failed, 2 when the existing database is in Datastore mode.
+ensure_firestore_db() {
+  local project="$1" location="$2" db_type
+  if db_type=$(gcloud firestore databases describe --database="(default)" \
+        --project="$project" --format='value(type)' 2>/dev/null); then
+    if [[ "$db_type" == "DATASTORE_MODE" ]]; then
+      echo "existing (default) database is in Datastore mode"
+      return 2
+    fi
+    echo "already exists"
+    return 0
+  fi
+  if gcloud firestore databases create --database="(default)" \
+        --location="$location" --type=firestore-native \
+        --project="$project" --quiet >/dev/null 2>&1; then
+    echo "created in $location"
+    return 0
+  fi
+  echo "create failed"
+  return 1
+}
+
+# cloud_run_service_url <service> <region> <project>
+#
+# Prints the service's deterministic URL
+# (https://<service>-<project-number>.<region>.run.app) rather than the legacy
+# hashed one (https://<service>-<hash>-<region-code>.a.run.app) that
+# status.url reports. Both serve the same service; the annotation
+# run.googleapis.com/urls lists every URL. Falls back to status.url when the
+# annotation is absent. Prints nothing (and returns 1) if describe fails.
+cloud_run_service_url() {
+  local service="$1" region="$2" project="$3" json
+  json=$(gcloud run services describe "$service" \
+    --region "$region" --project "$project" --format json 2>/dev/null) || return 1
+  jq -r '
+    (.metadata.annotations["run.googleapis.com/urls"] // "[]" | fromjson
+      | map(select(endswith(".a.run.app") | not)) | first)
+    // .status.url // empty' <<<"$json"
+}
+
 # is_proxy_deployed_to_env <proxy_name> <env> <org> <token>
 #
 # Returns 0 if the proxy has any active revision deployed in <env>.

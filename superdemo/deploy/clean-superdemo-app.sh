@@ -22,6 +22,8 @@
 #     (owned by superdemo/terraform)
 #   - the cloud-run-source-deploy Artifact Registry repo and its images
 #     (shared by any --source deploy; delete manually if you want it gone)
+#   - the Firestore (default) database and its superdemo/allowlist document
+#     (the database is project-wide and may hold other data)
 
 set -u
 
@@ -50,5 +52,7 @@ echo
 echo "============================================="
 echo " Superdemo app cleanup complete!"
 echo "============================================="
-echo " Note: the app SA and superdemo-config secret (Terraform-owned) and the"
-echo " cloud-run-source-deploy Artifact Registry repo were left in place."
+echo " Note: the app SA and superdemo-config secret (Terraform-owned), the"
+echo " cloud-run-source-deploy Artifact Registry repo, and the Firestore access"
+echo " allowlist (document superdemo/allowlist in the (default) database) were"
+echo " left in place."
