@@ -71,64 +71,14 @@ check_required_commands gcloud jq curl
 # Tracks whether anything failed for the final exit code.
 overall_failed=0
 
-# ====================================================================
-# Enable required GCP APIs (idempotent — no-op if already enabled)
-# ====================================================================
-echo "============================================="
-echo " Enabling required Google Cloud APIs"
-echo "============================================="
-api_enable_status="ok"
-if ! gcloud services enable \
-      apigee.googleapis.com \
-      secretmanager.googleapis.com \
-      aiplatform.googleapis.com \
-      modelarmor.googleapis.com \
-      run.googleapis.com \
-      apihub.googleapis.com \
-      cloudtasks.googleapis.com \
-      --project="$PROJECT"; then
-  api_enable_status="failed"
-  overall_failed=1
-  echo "WARN: API enablement failed. Continuing so the summary still prints."
-fi
+# APIs, the apigee-mcp runtime SA ($SA_EMAIL) and the superdemo-config secret
+# are provisioned by superdemo/terraform — run `terraform apply` first.
 
 # ====================================================================
 # Set up tools used by the demo loop
 # ====================================================================
 insure_apigeecli
 TOKEN=$(gcloud auth print-access-token)
-
-# ====================================================================
-# Provision the apigee-mcp runtime SA + grant roles.
-# The three apigee-mcp proxies (crm-mcp-proxy, customers-api, mcp-spec-tools)
-# are deployed with --sa "$SA_EMAIL". That identity needs roles/run.invoker
-# (to call the Cloud Run targets) and roles/apihub.admin (so mcp-spec-tools
-# can read specs from API hub at runtime).
-# Idempotent: create_service_account_if_necessary is a no-op if the SA exists,
-# and add_roles_to_service_account skips roles that are already bound.
-# ====================================================================
-echo
-echo "============================================="
-echo " Provisioning apigee-mcp service account"
-echo "============================================="
-create_service_account_if_necessary "${MCP_SERVICE_ACCOUNT_NAME}" "${PROJECT_ID}" "Apigee MCP demo runtime SA"
-
-# Grant required roles inline rather than via shlib's add_roles_to_service_account.
-# That helper relies on `declare -n` namerefs (bash 4+); macOS ships bash 3.2 by
-# default, which fails with "declare: -n: invalid option". gcloud's
-# add-iam-policy-binding is itself idempotent, so the simple loop here is
-# functionally equivalent — it just skips the "check before binding" optimization.
-for role in "roles/run.invoker" "roles/apihub.admin"; do
-  echo "  Granting $role to $SA_EMAIL..."
-  if ! gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-        --member="serviceAccount:$SA_EMAIL" \
-        --role="$role" \
-        --condition=None \
-        --quiet >/dev/null; then
-    echo "  WARN: failed to grant $role to $SA_EMAIL"
-    overall_failed=1
-  fi
-done
 
 # ====================================================================
 # Demo registry
@@ -405,15 +355,15 @@ for i in "${!demo_labels[@]}"; do
   echo
   echo "--- $label ---"
 
-  # Semantic cache needs a Vector Search index endpoint this script never
-  # provisions (slow + billed hourly). If the operator hasn't run
-  # setup-semantic-cache-index.sh AND the proxy isn't already deployed, record
-  # it undeployed and move on — every other demo still deploys.
+  # Semantic cache needs a Vector Search index endpoint, which Terraform only
+  # creates when opted in (slow + billed hourly). If it isn't ready AND the
+  # proxy isn't already deployed, record it undeployed and move on — every
+  # other demo still deploys.
   if [[ "$label" == "llm-semantic-cache-v2" ]] \
      && ! is_proxy_deployed_to_env "$proxy_name" "$APIGEE_ENV" "$PROJECT" "$TOKEN" >/dev/null 2>&1 \
      && ! is_semantic_cache_index_ready "$PROJECT" "$REGION"; then
     echo "  Vector Search index endpoint not ready."
-    echo "  Run ./superdemo/deploy/setup-semantic-cache-index.sh first (~20-30 min), then re-run."
+    echo "  Set TF_VAR_enable_semantic_cache=true and run terraform apply (~20-30 min), then re-run."
     demo_deploy_status+=("skipped (index prereq missing)")
     demo_test_status+=("skipped (index prereq missing)")
     continue
@@ -552,11 +502,14 @@ else
 
   should_write=0
   if (( secret_exists == 0 )); then
-    should_write=1
+    # Terraform owns the secret itself; this script only adds versions.
+    secret_status="failed (secret missing — run terraform apply)"
+    overall_failed=1
   else
-    # On read failure, prefer to write — better to publish a fresh version
-    # than to do nothing when we can't compare. Keep the gcloud and jq
-    # exit codes separate so an empty/malformed read still surfaces the WARN.
+    # On read failure (including a fresh secret with no versions yet), prefer
+    # to write — better to publish a fresh version than to do nothing when we
+    # can't compare. Keep the gcloud and jq exit codes separate so an
+    # empty/malformed read still surfaces the notice.
     current_raw=$(gcloud secrets versions access latest \
           --secret="$SECRET_NAME" --project="$PROJECT" 2>/dev/null)
     gcloud_rc=$?
@@ -565,32 +518,23 @@ else
       current_payload=$(printf '%s' "$current_raw" | jq -S '.' 2>/dev/null) || current_payload=""
     fi
     if (( gcloud_rc != 0 )) || [[ -z "$current_payload" ]]; then
-      echo "WARN: could not read current secret version; will write a new one."
+      echo "No readable current secret version; will write a new one."
       should_write=1
     elif [[ "$current_payload" != "$new_payload" ]]; then
       should_write=1
     fi
   fi
 
-  if (( should_write == 0 )); then
-    secret_status="skipped (no changes)"
-  else
-    if (( secret_exists == 0 )); then
-      if ! gcloud secrets create "$SECRET_NAME" --replication-policy="automatic" --project="$PROJECT"; then
-        secret_status="failed (create)"
-        overall_failed=1
-      fi
-    fi
-
-    if [[ -z "$secret_status" ]]; then
-      if version_out=$(gcloud secrets versions add "$SECRET_NAME" \
-            --data-file="$tmpfile" --project="$PROJECT" --format="value(name)" 2>&1); then
-        version_id="${version_out##*/}"
-        secret_status="updated ($SECRET_NAME v$version_id)"
-      else
-        secret_status="failed (versions add)"
-        overall_failed=1
-      fi
+  if [[ -z "$secret_status" ]]; then
+    if (( should_write == 0 )); then
+      secret_status="skipped (no changes)"
+    elif version_out=$(gcloud secrets versions add "$SECRET_NAME" \
+          --data-file="$tmpfile" --project="$PROJECT" --format="value(name)" 2>&1); then
+      version_id="${version_out##*/}"
+      secret_status="updated ($SECRET_NAME v$version_id)"
+    else
+      secret_status="failed (versions add)"
+      overall_failed=1
     fi
   fi
 
@@ -627,7 +571,6 @@ for i in "${!demo_labels[@]}"; do
     "${demo_test_status[$i]}"
 done
 echo
-echo " API enablement:   $api_enable_status"
 echo " Secret Manager:   $secret_status"
 echo
 echo " Result: $deploys_ok/$total deploys OK, $tests_ok/$total smoke tests passed"

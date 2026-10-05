@@ -43,46 +43,6 @@ require_env_vars() {
   return 0
 }
 
-# wait_for_sa <sa_email> <project> [max_attempts] [delay_seconds]
-#
-# A freshly created service account is not immediately visible to the IAM
-# policy API, so `add-iam-policy-binding` can fail with "does not exist". Poll
-# `describe` until the SA appears. Returns 0 once visible, 1 if it never does.
-wait_for_sa() {
-  local sa_email="$1" project="$2" max="${3:-12}" delay="${4:-5}" i
-  for (( i = 1; i <= max; i++ )); do
-    if gcloud iam service-accounts describe "$sa_email" \
-          --project="$project" >/dev/null 2>&1; then
-      return 0
-    fi
-    sleep "$delay"
-  done
-  return 1
-}
-
-# grant_sa_role <project> <sa_email> <role> [max_attempts]
-#
-# add-iam-policy-binding is idempotent, but right after SA creation it can still
-# fail transiently ("does not exist") while the new SA propagates to the IAM
-# policy backend. Retry with a linear backoff. Returns 0 on success, 1 if all
-# attempts fail.
-grant_sa_role() {
-  local project="$1" sa_email="$2" role="$3" max="${4:-5}" i
-  for (( i = 1; i <= max; i++ )); do
-    if gcloud projects add-iam-policy-binding "$project" \
-          --member="serviceAccount:$sa_email" \
-          --role="$role" \
-          --condition=None \
-          --quiet >/dev/null 2>&1; then
-      return 0
-    fi
-    if (( i < max )); then
-      sleep $(( i * 3 ))
-    fi
-  done
-  return 1
-}
-
 # is_proxy_deployed_to_env <proxy_name> <env> <org> <token>
 #
 # Returns 0 if the proxy has any active revision deployed in <env>.
@@ -124,7 +84,7 @@ is_proxy_deployed_to_env() {
 # "semantic_cache_index_endpoint_deployment" (the id the sibling proxy's
 # SemanticCacheLookup policy targets). Used to gate the semantic-cache demo:
 # the endpoint is slow to deploy (~20-30 min) and billed hourly, so
-# deploy-superdemo.sh never provisions it — setup-semantic-cache-index.sh does.
+# it is opt-in via superdemo/terraform (enable_semantic_cache).
 is_semantic_cache_index_ready() {
   local project="$1" region="$2" count
   count=$(gcloud ai index-endpoints list \

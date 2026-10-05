@@ -12,6 +12,7 @@ Setup and local-development guide for the Superdemo. For an overview of what the
 
 **Used by the deploy scripts:** 
 - [gcloud CLI](https://cloud.google.com/sdk/docs/install),
+- [Terraform](https://developer.hashicorp.com/terraform/install) 1.5+
 - [apigeecli](https://github.com/apigee/apigeecli) (auto-installed by the deploy script)
 
 **Used by the app:** 
@@ -38,16 +39,27 @@ cp ./superdemo/deploy/env.sh ./superdemo/deploy/secret.sh
 ```bash
 source ./superdemo/deploy/secret.sh
 ```
-4. (Optional — for the **LLM Semantic Cache** demo) Provision its Vertex AI Vector Search index. Takes ~20–30 min and is billed hourly while it exists; skip it and every other demo still deploys.
+4. Provision the project: APIs, service accounts, and the `superdemo-config` secret.
 ```bash
-./superdemo/deploy/setup-semantic-cache-index.sh
+terraform -chdir=superdemo/terraform init
+terraform -chdir=superdemo/terraform apply
 ```
+   For the **LLM Semantic Cache** demo, set `TF_VAR_enable_semantic_cache=true` in `secret.sh` first. It adds a Vector Search index that takes ~20–30 min and is billed hourly; skip it and every other demo still deploys.
+
 5. Deploy all demo proxies and store the resulting keys in the `superdemo-config` secret:
 ```bash
 ./superdemo/deploy/deploy-superdemo.sh
 ```
 
-To tear everything down (including the Vector Search index): `./superdemo/deploy/clean-superdemo.sh`.
+To tear everything down: `./superdemo/deploy/clean-superdemo.sh`, then `terraform -chdir=superdemo/terraform destroy`.
+
+**Deployed before Terraform was added?** Import the existing resources once before `apply` (skip any that don't exist):
+```bash
+terraform -chdir=superdemo/terraform import google_service_account.mcp "projects/$PROJECT_ID/serviceAccounts/$SA_EMAIL"
+terraform -chdir=superdemo/terraform import google_service_account.app "projects/$PROJECT_ID/serviceAccounts/superdemo-app-svc-acct@$PROJECT_ID.iam.gserviceaccount.com"
+terraform -chdir=superdemo/terraform import google_secret_manager_secret.config "projects/$PROJECT_ID/secrets/superdemo-config"
+```
+If you used the old `setup-semantic-cache-index.sh`, delete its index and endpoint (and the `ai-client` service account) before enabling the semantic cache in Terraform, or you'll be billed for two.
 
 ## Local dev
 
