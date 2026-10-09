@@ -22,7 +22,7 @@ const USERS: { id: PerUserId; label: string }[] = [
   { id: 'bob', label: 'Bob' },
 ]
 
-const DEFAULT_PROMPT = 'Write a haiku about API gateways.'
+const DEFAULT_PROMPT = 'Write a haiku about AI gateways.'
 
 export function LlmTokenLimitsPerUserDemo({ demos, demo }: Props) {
   const model = demo.model ?? 'gemini-2.5-flash'

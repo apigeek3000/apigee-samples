@@ -28,6 +28,12 @@ variable "mcp_service_account_name" {
   default     = "apigee-mcp-svc-acct"
 }
 
+variable "llm_security_service_account_name" {
+  description = "llm-security-v2 proxy runtime SA. Must match SERVICE_ACCOUNT_NAME."
+  type        = string
+  default     = "llm-security-v2-svc-acct"
+}
+
 variable "app_service_account_name" {
   description = "Cloud Run backend SA. Must match APP_SERVICE_ACCOUNT_NAME."
   type        = string

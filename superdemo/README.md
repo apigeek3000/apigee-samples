@@ -13,7 +13,7 @@ flowchart LR
     end
 
     subgraph backend["⚙️ FastAPI Backend — signed reverse proxy"]
-        proxy["/api/proxy/{demo}/*<br/>injects API key server-side<br/>mints Vertex bearer via ADC"]
+        proxy["/api/proxy/{demo}/*<br/>injects API key server-side<br/>mints Agent Platform bearer via ADC"]
     end
 
     subgraph gcp["☁️ Google Cloud"]
@@ -32,14 +32,14 @@ flowchart LR
 ## Wired-up demos
 
 - **Basic Quota** — Demonstrates Apigee Quota policies. Trial tier allows 10 requests/minute. Premium tier allows 1000 requests/hour.
-- **LLM Security v2** — Routes prompts through Google Cloud Model Armor for threat protection before forwarding to Vertex AI.
+- **LLM Security v2** — Routes prompts through Google Cloud Model Armor for threat protection before forwarding to Agent Platform.
 - **LLM Rate Limiting** — Demonstrates Apigee's LLMTokenQuota AI policy. Bronze tier allows 2000 tokens per 5 minutes; silver allows 5000. Same prompt is sent to both tiers in parallel.
 - **MCP Server** — Apigee serves as an MCP server: dynamically discovers tools from Apigee API hub specs and exposes them to a streaming AI agent.
 - **Cloud Logging** — Apigee MessageLogging policy writes a structured entry to Google Cloud Logging on every request.
 - **Threat Protection** — Apigee RegularExpressionProtection blocks SQL keywords in query params; JSONThreatProtection rejects oversized JSON payloads.
-- **LLM Circuit Breaking** (`llm-circuit-breaking`) — a failover quota counts **upstream failures, not requests**: the counting policy is attached only to the primary target's FaultRule, so it increments solely when Vertex AI returns a 429 or another error. Once 2 failures land inside 2 minutes the breaker trips and traffic routes to a secondary Vertex AI region. superdemo deploys a patched revision of the sibling proxy that also returns `x-target-pool` / `x-target-region` response headers, so the UI can show which backend served each request. Normal traffic therefore stays on `primary`. To force a failover, the UI's **Break the primary** button sends requests for a model Vertex AI does not publish; the resulting 404 feeds the same counter a 429 would, so the breaker opens deterministically. (The sibling sample's notebook instead fans out ~90 requests via Cloud Tasks to exhaust the project's Gemini quota — but Gemini 2.5 runs under [dynamic shared quota](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/dynamic-shared-quota), which has no per-project limit to exceed, so that trigger is not reliable.) Note the quota is global — it is shared across everyone calling the deployment.
+- **LLM Circuit Breaking** (`llm-circuit-breaking`) — a failover quota counts **upstream failures, not requests**: the counting policy is attached only to the primary target's FaultRule, so it increments solely when Agent Platform returns a 429 or another error. Once 2 failures land inside 2 minutes the breaker trips and traffic routes to a secondary Agent Platform region. superdemo deploys a patched revision of the sibling proxy that also returns `x-target-pool` / `x-target-region` response headers, so the UI can show which backend served each request. Normal traffic therefore stays on `primary`. To force a failover, the UI's **Break the primary** button sends requests for a model Agent Platform does not publish; the resulting 404 feeds the same counter a 429 would, so the breaker opens deterministically. (The sibling sample's notebook instead fans out ~90 requests via Cloud Tasks to exhaust the project's Gemini quota — but Gemini 2.5 runs under [dynamic shared quota](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/dynamic-shared-quota), which has no per-project limit to exceed, so that trigger is not reliable.) Note the quota is global — it is shared across everyone calling the deployment.
 - **Per-User Token Limits** (`llm-token-limits-per-user`) — LLM token quotas keyed on an `x-userid` header rather than the app. Two users share one API key but get independent token budgets.
-- **LLM Semantic Cache** (`llm-semantic-cache-v2`) — Apigee's SemanticCacheLookup serves a semantically-similar prompt straight from a Vertex AI Vector Search index, skipping the model call; the UI shows the latency drop. Needs a one-time Vector Search prerequisite — see [SETUP.md](SETUP.md).
+- **LLM Semantic Cache** (`llm-semantic-cache-v2`) — Apigee's SemanticCacheLookup serves a semantically-similar prompt straight from a Agent Platform Vector Search index, skipping the model call; the UI shows the latency drop. Needs a one-time Vector Search prerequisite — see [SETUP.md](SETUP.md).
 
 `SECONDARY_REGION` is optional (defaults to `us-east1`). It is the failover region for the LLM Circuit Breaking demo; it must differ from `REGION` for the failover to be visible.
 

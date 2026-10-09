@@ -43,8 +43,8 @@ attaches.
 
 ## 2. LLM Security v2
 
-**What it shows:** Model Armor inspecting prompts before they reach Vertex
-AI. Jailbreak attempts and malicious URIs are blocked at the Apigee layer;
+**What it shows:** Model Armor inspecting prompts before they reach Agent
+Platform. Jailbreak attempts and malicious URIs are blocked at the Apigee layer;
 benign prompts pass through.
 
 **Backend route:** `POST /api/proxy/llm-security/v1/projects/{project}/locations/{region}/publishers/google/models/{model}:generateContent`
@@ -55,9 +55,9 @@ benign prompts pass through.
 
 1. Select **LLM Security v2** in the sidebar.
 2. Click the **Safe: flower-shop names** chip. Click **Send Prompt** — the
-   response card shows a normal Vertex AI completion.
+   response card shows a normal Agent Platform completion.
 3. Click the **Jailbreak attempt** chip. Click **Send Prompt** — Apigee
-   returns a Model Armor block payload (no Vertex call was made).
+   returns a Model Armor block payload (no Agent Platform call was made).
 4. Click the **Malicious URI** chip. Click **Send Prompt** — Model Armor's
    URI filter blocks it with a different rationale than the jailbreak.
 5. (Optional) Type a custom prompt to show the inspection runs on
@@ -79,7 +79,7 @@ the audience can see Bronze trip a 429 while Silver keeps serving.
 
 **Backend route:** `POST /api/proxy/llm-token-limits-v2/v1/projects/{project}/locations/{region}/publishers/google/models/{model}:generateContent`
 — key as `x-apikey`, tier as `x-rate-limit-tier` (`bronze` or `silver`).
-The backend also mints a Vertex AI OAuth bearer via ADC because the
+The backend also mints an Agent Platform OAuth bearer via ADC because the
 underlying proxy intentionally has no `<GoogleAccessToken>` policy.
 
 **Demo path:**

@@ -124,7 +124,7 @@ export function LlmCircuitBreakingDemo({ demos, demo }: Props) {
           <h3 className={styles.panelTitle}>Watch the breaker</h3>
           <p className={styles.panelSubtitle}>
             Traffic goes to <code>{region}</code>. The breaker counts{' '}
-            <strong>upstream failures</strong>, not requests: once Vertex AI
+            <strong>upstream failures</strong>, not requests: once Agent Platform
             returns {threshold} errors within {windowMinutes} minutes, the
             RouteRule parks traffic on{' '}
             <code>{demo.secondary_region ?? 'the secondary region'}</code> until

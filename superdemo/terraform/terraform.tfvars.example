@@ -10,8 +10,9 @@ region     = "<your-vertex-region>"
 enable_semantic_cache = false
 
 # Change only if you've customized MCP_SERVICE_ACCOUNT_NAME /
-# APP_SERVICE_ACCOUNT_NAME in secret.sh.
+# SERVICE_ACCOUNT_NAME / APP_SERVICE_ACCOUNT_NAME in secret.sh.
 # mcp_service_account_name = "apigee-mcp-svc-acct"
+# llm_security_service_account_name = "llm-security-v2-svc-acct"
 # app_service_account_name = "superdemo-app-svc-acct"
 
 # Pause after enabling APIs and after IAM grants (first create only).

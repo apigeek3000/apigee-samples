@@ -67,7 +67,7 @@ export function LlmSecurityDemo({ demos, demo }: Props) {
         <h2>LLM Security v2</h2>
         <p>
           Sends a prompt through Apigee, where Model Armor inspects it before
-          forwarding to Vertex AI. Try a safe prompt and a jailbreak prompt to
+          forwarding to Agent Platform. Try a safe prompt and a jailbreak prompt to
           see Model Armor in action.
         </p>
       </header>
@@ -112,7 +112,7 @@ export function LlmSecurityDemo({ demos, demo }: Props) {
       </div>
 
       <ResponseCard
-        title="Vertex AI response"
+        title="Agent Platform response"
         payload={payload}
         error={error}
       />

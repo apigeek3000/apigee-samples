@@ -24,6 +24,7 @@ locals {
     "cloudbuild.googleapis.com",
     "artifactregistry.googleapis.com",
     "firestore.googleapis.com",
+    "integrations.googleapis.com",
   ]
 
   mcp_roles = ["roles/run.invoker", "roles/apihub.admin"]
@@ -56,7 +57,23 @@ resource "time_sleep" "iam_propagation" {
     google_project_iam_member.mcp,
     google_project_iam_member.app,
     google_project_iam_member.ai_client,
+    google_project_iam_member.compute_run_builder,
+    google_service_account_iam_member.apigee_ai_client_token_creator,
+    google_service_account_iam_member.apigee_mcp_token_creator,
+    google_project_iam_member.llm_security,
+    google_service_account_iam_member.apigee_llm_security_token_creator,
   ]
+}
+
+data "google_project" "this" {}
+
+# Cloud Run source deploys (apigee-mcp stubs) build as the default compute SA,
+# which newer projects no longer grant Editor — it can't read the source bucket.
+resource "google_project_iam_member" "compute_run_builder" {
+  project    = var.project_id
+  role       = "roles/run.builder"
+  member     = "serviceAccount:${data.google_project.this.number}-compute@developer.gserviceaccount.com"
+  depends_on = [time_sleep.apis_propagation]
 }
 
 # apigee-mcp proxies run as this SA (deployed with --sa "$SA_EMAIL").
@@ -71,6 +88,13 @@ resource "google_project_iam_member" "mcp" {
   project  = var.project_id
   role     = each.value
   member   = google_service_account.mcp.member
+}
+
+# Lets Apigee mint the proxy's Google tokens as this SA (see apigee_ai_client_token_creator).
+resource "google_service_account_iam_member" "apigee_mcp_token_creator" {
+  service_account_id = google_service_account.mcp.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:service-${data.google_project.this.number}@gcp-sa-apigee.iam.gserviceaccount.com"
 }
 
 # Cloud Run backend SA (deploy-superdemo-app.sh).

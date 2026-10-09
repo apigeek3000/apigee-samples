@@ -35,6 +35,15 @@ resource "google_project_iam_member" "ai_client" {
   member  = google_service_account.ai_client[0].member
 }
 
+# The proxy's <GoogleAccessToken> is minted by the Apigee service agent acting
+# as ai-client; without this the proxy fails with AccessTokenGenerationFailure.
+resource "google_service_account_iam_member" "apigee_ai_client_token_creator" {
+  count              = local.semantic_cache_count
+  service_account_id = google_service_account.ai_client[0].name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:service-${data.google_project.this.number}@gcp-sa-apigee.iam.gserviceaccount.com"
+}
+
 resource "google_vertex_ai_index" "semantic_cache" {
   count               = local.semantic_cache_count
   display_name        = "semantic-cache-index"

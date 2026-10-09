@@ -142,7 +142,7 @@ main() {
   # terraform console evaluates one line at a time, so keep this on one line.
   # An unset required variable makes jsonencode fail, so cfg ends up empty.
   local cfg
-  cfg=$(echo 'jsonencode({project = var.project_id, region = var.region, apis = local.apis, mcp_roles = local.mcp_roles, app_roles = local.app_roles, mcp_sa = var.mcp_service_account_name, app_sa = var.app_service_account_name, semantic = var.enable_semantic_cache})' \
+  cfg=$(echo 'jsonencode({project = var.project_id, region = var.region, apis = local.apis, mcp_roles = local.mcp_roles, app_roles = local.app_roles, llm_security_roles = local.llm_security_roles, mcp_sa = var.mcp_service_account_name, app_sa = var.app_service_account_name, llm_security_sa = var.llm_security_service_account_name, semantic = var.enable_semantic_cache})' \
           | tf console 2>/dev/null | jq -r 'fromjson' 2>/dev/null)
   if ! jq -e '.project != "" and .region != "" and (.apis | length > 0)' <<<"$cfg" >/dev/null 2>&1; then
     echo "ERROR: could not read the Terraform config. Create superdemo/terraform/terraform.tfvars"
@@ -160,9 +160,10 @@ main() {
   # No state file yet → nothing in state.
   state_list=$(tf state list 2>/dev/null || true)
 
-  local mcp_email app_email enabled_apis policy svc role
+  local mcp_email app_email llm_security_email enabled_apis policy svc role
   mcp_email=$(sa_email "$(jq -r .mcp_sa <<<"$cfg")" "$project")
   app_email=$(sa_email "$(jq -r .app_sa <<<"$cfg")" "$project")
+  llm_security_email=$(sa_email "$(jq -r .llm_security_sa <<<"$cfg")" "$project")
   enabled_apis=$(gcloud services list --enabled --project="$project" \
                    --format='value(config.name)' 2>/dev/null)
   policy=$(gcloud projects get-iam-policy "$project" --format=json 2>/dev/null)
@@ -180,6 +181,8 @@ main() {
     sa_exists "$mcp_email"
   try_import google_service_account.app "projects/$project/serviceAccounts/$app_email" \
     sa_exists "$app_email"
+  try_import google_service_account.llm_security "projects/$project/serviceAccounts/$llm_security_email" \
+    sa_exists "$llm_security_email"
   while IFS= read -r role; do
     try_import "google_project_iam_member.mcp[\"$role\"]" "$project $role serviceAccount:$mcp_email" \
       policy_has_member "$policy" "$role" "serviceAccount:$mcp_email"
@@ -188,6 +191,10 @@ main() {
     try_import "google_project_iam_member.app[\"$role\"]" "$project $role serviceAccount:$app_email" \
       policy_has_member "$policy" "$role" "serviceAccount:$app_email"
   done < <(jq -r '.app_roles[]' <<<"$cfg")
+  while IFS= read -r role; do
+    try_import "google_project_iam_member.llm_security[\"$role\"]" "$project $role serviceAccount:$llm_security_email" \
+      policy_has_member "$policy" "$role" "serviceAccount:$llm_security_email"
+  done < <(jq -r '.llm_security_roles[]' <<<"$cfg")
 
   echo
   echo "Secret container and Firestore database"

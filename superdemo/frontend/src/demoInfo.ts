@@ -74,7 +74,7 @@ export const demoInfo: Record<string, DemoInfo> = {
     SP[Sanitize policies]
   end
   MA[Model Armor]
-  Vertex[(Vertex AI)]
+  Vertex[(Agent Platform)]
   Browser -- prompt --> Apigee
   Apigee -- inspect --> MA
   MA -- verdict --> Apigee
@@ -82,7 +82,7 @@ export const demoInfo: Record<string, DemoInfo> = {
   Apigee -. blocked .-> Browser
   Vertex --> Apigee --> Browser`,
     description:
-      'Apigee calls out to Model Armor — a separate Google Cloud service, not a component inside the proxy — to inspect every prompt before it reaches Vertex AI, and again to inspect responses on the way back. Apigee enforces a uniform safety policy in front of the LLM backend without the client or the model needing to know.',
+      'Apigee calls out to Model Armor — a separate Google Cloud service, not a component inside the proxy — to inspect every prompt before it reaches Agent Platform, and again to inspect responses on the way back. Apigee enforces a uniform safety policy in front of the LLM backend without the client or the model needing to know.',
     policyLinks: [
       {
         label: 'VerifyAPIKey',
@@ -130,13 +130,13 @@ export const demoInfo: Record<string, DemoInfo> = {
   subgraph Apigee["Apigee Proxy"]
     VAK[VerifyAPIKey]
     Q["Token Quota<br/>bronze / silver"]
-    Mint["Mint Vertex<br/>OAuth Token"]
+    Mint["Mint Agent Platform<br/>OAuth Token"]
   end
-  Vertex[(Vertex AI)]
+  Vertex[(Agent Platform)]
   Browser --> VAK --> Q --> Mint --> Vertex
   Q -. 429 over budget .-> Browser`,
     description:
-      'Token-based quotas: bronze and silver tiers each get a budget measured in tokens consumed, not requests made. Apigee also mints the Vertex bearer token so the client never needs Google credentials.',
+      'Token-based quotas: bronze and silver tiers each get a budget measured in tokens consumed, not requests made. Apigee also mints the Agent Platform bearer token so the client never needs Google credentials.',
     policyLinks: [
       {
         label: 'VerifyAPIKey',
@@ -272,14 +272,14 @@ export const demoInfo: Record<string, DemoInfo> = {
     Q[Quota<br/>2 failures per 2 min]
     RR{RouteRule}
   end
-  P[(Vertex AI<br/>primary region)]
-  S[(Vertex AI<br/>secondary region)]
+  P[(Agent Platform<br/>primary region)]
+  S[(Agent Platform<br/>secondary region)]
   Browser --> Q --> RR
   RR -- "breaker closed" --> P
   RR -- "breaker open" --> S
   P -. "4xx/5xx → retry" .-> S`,
     description:
-      'The breaker counts upstream failures, not requests. Q-LLM-Failover-Counter is attached only to the primary target’s FaultRule (condition: status 429 or > 399), so it increments solely when Vertex AI rejects a call. Q-LLM-Failover then reads that shared rolling-window counter on every request — once 2 failures land inside 2 minutes it trips, and the RouteRule parks traffic on a secondary Vertex AI region until the window rolls off. Within a single failing request, the FaultRule also retries against the secondary region via a ServiceCallout, so the caller still gets an answer. The proxy records the winning target in a flow variable, and superdemo patches it into x-target-pool / x-target-region response headers so the UI can show which backend actually served each request. Because a healthy primary never feeds the counter, normal traffic stays on primary. The sibling sample’s notebook forces a failover with a Cloud Tasks fan-out meant to exhaust the project’s Gemini quota — but Gemini 2.5 is served under dynamic shared quota, which has no per-project limit to exceed, so that trigger is not deterministic. This UI instead sends requests for a model Vertex AI does not publish: the 404 feeds the same counter a 429 would, and the breaker opens every time. Note the quota has no identifier, so it is shared across every caller of this deployment.',
+      'The breaker counts upstream failures, not requests. Q-LLM-Failover-Counter is attached only to the primary target’s FaultRule (condition: status 429 or > 399), so it increments solely when Agent Platform rejects a call. Q-LLM-Failover then reads that shared rolling-window counter on every request — once 2 failures land inside 2 minutes it trips, and the RouteRule parks traffic on a secondary Agent Platform region until the window rolls off. Within a single failing request, the FaultRule also retries against the secondary region via a ServiceCallout, so the caller still gets an answer. The proxy records the winning target in a flow variable, and superdemo patches it into x-target-pool / x-target-region response headers so the UI can show which backend actually served each request. Because a healthy primary never feeds the counter, normal traffic stays on primary. The sibling sample’s notebook forces a failover with a Cloud Tasks fan-out meant to exhaust the project’s Gemini quota — but Gemini 2.5 is served under dynamic shared quota, which has no per-project limit to exceed, so that trigger is not deterministic. This UI instead sends requests for a model Agent Platform does not publish: the 404 feeds the same counter a 429 would, and the breaker opens every time. Note the quota has no identifier, so it is shared across every caller of this deployment.',
     policyLinks: [
       { label: 'Quota', href: `${APIGEE_POLICY_BASE}/quota-policy` },
       {
@@ -309,13 +309,13 @@ export const demoInfo: Record<string, DemoInfo> = {
     VK[VerifyAPIKey]
     TQ["Quota<br/>keyed on x-userid"]
   end
-  Vertex[(Vertex AI)]
+  Vertex[(Agent Platform)]
   Alice -- "x-userid: alice" --> VK
   Bob -- "x-userid: bob" --> VK
   VK --> TQ --> Vertex
   TQ -. "429 when that user's<br/>budget is spent" .-> Alice`,
     description:
-      "Both users present the same API key, so they share an app and a product — but the quota is keyed on the x-userid header (Identifier ref=request.header.x-userid), so each gets an independent budget. Spend Alice's bronze allowance and she gets a 429 while Bob, on the very same key, still gets a 200. It is a standard Quota policy of type=flexi, split in two the way Apigee's token-limit samples always are: Q-TokenQuota runs EnforceOnly on the request and just checks the budget, while Q-TokenQuotaCounter runs CountOnly on the response and spends it, with MessageWeight ref=total_token_count. That variable comes from EV-ExtractTokenCounts reading usageMetadata.totalTokenCount out of the Vertex response — so cost is measured in tokens rather than requests, and it can only be charged after the model has answered.",
+      "Both users present the same API key, so they share an app and a product — but the quota is keyed on the x-userid header (Identifier ref=request.header.x-userid), so each gets an independent budget. Spend Alice's bronze allowance and she gets a 429 while Bob, on the very same key, still gets a 200. It is a standard Quota policy of type=flexi, split in two the way Apigee's token-limit samples always are: Q-TokenQuota runs EnforceOnly on the request and just checks the budget, while Q-TokenQuotaCounter runs CountOnly on the response and spends it, with MessageWeight ref=total_token_count. That variable comes from EV-ExtractTokenCounts reading usageMetadata.totalTokenCount out of the Agent Platform response — so cost is measured in tokens rather than requests, and it can only be charged after the model has answered.",
     policyLinks: [
       {
         label: 'VerifyAPIKey',
@@ -344,15 +344,15 @@ export const demoInfo: Record<string, DemoInfo> = {
     SCL[SemanticCacheLookup]
     SCP[SemanticCachePopulate]
   end
-  VS[(Vertex AI<br/>Vector Search)]
-  Vertex[(Vertex AI)]
+  VS[(Agent Platform<br/>Vector Search)]
+  Vertex[(Agent Platform)]
   Browser -- prompt --> SCL
   SCL -- embed + search --> VS
   SCL -. cache hit .-> Browser
   SCL -- miss --> Vertex --> SCP --> Browser
   SCP -- upsert embedding --> VS`,
     description:
-      "SemanticCacheLookup embeds the incoming prompt with an embeddings model, then does a nearest-neighbour search over a Vertex AI Vector Search index. If a prior prompt's embedding is within the distance threshold, its cached response is returned immediately and the model call is skipped. On a miss, the request reaches Vertex AI and SemanticCachePopulate stores the new prompt embedding and response for the configured TTL. The superdemo surfaces no hit/miss flag — the latency drop on a reworded prompt is the signal.",
+      "SemanticCacheLookup embeds the incoming prompt with an embeddings model, then does a nearest-neighbour search over a Agent Platform Vector Search index. If a prior prompt's embedding is within the distance threshold, its cached response is returned immediately and the model call is skipped. On a miss, the request reaches Agent Platform and SemanticCachePopulate stores the new prompt embedding and response for the configured TTL. The superdemo surfaces no hit/miss flag — the latency drop on a reworded prompt is the signal.",
     policyLinks: [
       {
         label: 'SemanticCacheLookup',

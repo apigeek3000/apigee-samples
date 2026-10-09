@@ -158,7 +158,7 @@ DEMO_METADATA = {
         "id": "llm-security",
         "title": "LLM Security v2",
         "description": "Routes prompts through Google Cloud Model Armor "
-        "for threat protection before forwarding to Vertex AI.",
+        "for threat protection before forwarding to Agent Platform.",
         "icon": "🛡️",
         "category": "ai-llm",
     },
@@ -209,7 +209,7 @@ DEMO_METADATA = {
         "title": "LLM Circuit Breaking",
         "description": (
             "A failover quota trips after 2 requests in 2 minutes, routing "
-            "traffic to a secondary Vertex AI region. The response headers "
+            "traffic to a secondary Agent Platform region. The response headers "
             "show which target pool actually served each request."
         ),
         "icon": "🚧",
@@ -231,7 +231,7 @@ DEMO_METADATA = {
         "title": "LLM Semantic Cache",
         "description": (
             "Apigee's SemanticCacheLookup embeds each prompt and searches a "
-            "Vertex AI Vector Search index; a semantically-similar prompt is "
+            "Agent Platform Vector Search index; a semantically-similar prompt is "
             "served straight from the cache, skipping the model call. Latency "
             "shows the speedup."
         ),
@@ -304,10 +304,10 @@ DEMO_METADATA = {
     },
     "llm-vertexai-agent": {
         "id": "llm-vertexai-agent",
-        "title": "Vertex AI Agent",
+        "title": "Conversational Agent",
         "description": (
-            "Proxies a Vertex AI / Dialogflow conversational agent through "
-            "Apigee for auth and governance."
+            "Exposes an Apigee proxy as a tool for a Dialogflow CX Conversational "
+            "Agent, adding Apigee auth and governance."
         ),
         "icon": "🕵️",
         "category": "ai-llm",
